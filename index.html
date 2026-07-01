@@ -772,6 +772,7 @@ function renderResults(q, sample, sim){
   `;
   $('results').classList.add('on');
   paintMarkers(sim);
+  curQID=q.id; renderQData(q); paintIndicator(q.id);  /* 질문별 실데이터: 결과 상단 + 지도 색칠 */
 }
 function stanceColor(){return 'var(--accent)';}
 
@@ -847,6 +848,7 @@ async function setLevel(lv,force){
   if(map.getSource('admin')) map.getSource('admin').setData(gj);
   if(lv==='sido') buildMask(gj);
   repaintFill(); updateSelLayer();
+  if(curQID&&IND) paintIndicator(curQID);  /* 레벨 전환 후에도 실데이터 색 유지 */
 }
 /* 한국 외부를 가리는 마스크 (세계 사각형 − 시도 외곽선 구멍) → 다른 나라 숨김 */
 function buildMask(gj){
@@ -1070,10 +1072,61 @@ $('selClear').onclick=clearSel;
 /* ---- toast ---- */
 let tt; function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2100);}
 
+/* ==== 질문별 실데이터 지표 (indicators.json: 행안부 주민등록 + KOSIS 출산율) ==== */
+let IND=null, curQID=null;
+async function loadIndicators(){
+  try{ IND=await fetch('./data/indicators.json').then(r=>{if(!r.ok)throw 0;return r.json();}); }catch(e){ IND=null; }
+}
+function indSpec(qid){ if(!IND)return null; return IND.questions[qid]||IND.questions['q_settle']; }
+function indSeq(t){ t=Math.max(0,Math.min(1,t)); const a=[239,236,255],b=[124,92,255];
+  return `rgb(${Math.round(a[0]+(b[0]-a[0])*t)},${Math.round(a[1]+(b[1]-a[1])*t)},${Math.round(a[2]+(b[2]-a[2])*t)})`; }
+function indFmt(spec,v){ if(v==null||isNaN(v))return '–'; return spec.kind==='ratio'?(v*100).toFixed(spec.digits)+'%':v.toFixed(spec.digits); }
+function paintIndicator(qid){
+  if(!mapReady||!IND||!map.getLayer('admin-fill'))return;
+  const spec=indSpec(qid), key=spec.key, bc=IND.byCode;
+  const vals=Object.values(bc).map(o=>o[key]).filter(v=>v!=null&&!isNaN(v));
+  if(!vals.length)return;
+  const lo=Math.min(...vals), hi=Math.max(...vals), stops=[];
+  Object.entries(bc).forEach(([c,o])=>{ if(o[key]==null)return;
+    let t=hi>lo?(o[key]-lo)/(hi-lo):.5; if(spec.good==='low')t=1-t; stops.push(c, indSeq(t)); });
+  // sido 2자리 기준 색칠 (시군구/읍면동도 상위 시도 지표로)
+  map.setPaintProperty('admin-fill','fill-color',['match',['slice',['to-string',['get','code']],0,2],...stops,'#c9cfe0']);
+  map.setPaintProperty('admin-fill','fill-opacity',['case',['boolean',['feature-state','hover'],false],0.72,0.52]);
+}
+/* 시도코드(11,21..)→ 페르소나 지역명 (원본 SIDO 코드계와 무관하게 표시용) */
+function indRegionRows(spec){
+  const key=spec.key, bc=IND.byCode;
+  const rows=Object.entries(bc).filter(([c,o])=>o[key]!=null)
+    .map(([c,o])=>({name:o.name.replace(/(특별자치시|특별자치도|특별시|광역시|자치시|자치도|시|도)$/,'')||o.name, v:o[key]}))
+    .sort((a,b)=>b.v-a.v);
+  const hi=rows.slice(0,3), lo=rows.slice(-3).reverse();
+  const mx=rows[0].v||1;
+  const row=r=>`<tr><td class="rn">${r.name}</td>
+    <td><div class="mini"><i style="width:${Math.max(6,Math.round(r.v/mx*100))}%;background:var(--accent)"></i></div></td>
+    <td class="pcell">${indFmt(spec,r.v)}</td></tr>`;
+  const good=spec.good==='high'?'상위':'하위';
+  return {hi:hi.map(row).join(''), lo:lo.map(row).join(''), goodLabel:good};
+}
+function renderQData(q){
+  if(!IND)return; const spec=indSpec(q.id); if(!spec)return;
+  const nat=IND.national[spec.key];
+  const t=indRegionRows(spec);
+  const html=`<div class="res-sec">
+    <h3>관련 지표 · 실데이터</h3>
+    <div class="disc" style="margin-bottom:11px"><b>${spec.label}</b> · 전국 <b class="num">${indFmt(spec,nat)}</b> · 출처 ${spec.source}. 지도 색이 진할수록 ${spec.good==='high'?'값이 큼':'지표상 취약'}.</div>
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:2px 0 6px">${spec.good==='high'?'높은':'심한'} 지역</div>
+    <table class="rtbl"><tbody>${spec.good==='high'?t.hi:t.lo}</tbody></table>
+    <div style="font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:12px 0 6px">반대 지역</div>
+    <table class="rtbl"><tbody>${spec.good==='high'?t.lo:t.hi}</tbody></table>
+  </div>`;
+  $('resBody').insertAdjacentHTML('afterbegin', html);
+}
+
 /* ---- boot ---- */
 renderChips(); renderHistory(); updateMatch();
 if(!initMap()){ $('mapFallback').querySelector('span').textContent='지도를 불러오지 못했지만 의견 분석은 그대로 사용할 수 있습니다.'; }
-loadRealPop();  /* 실측 시도 인구 반영 (JS만) */
+loadRealPop();       /* 실측 시도 인구 반영 (JS만) */
+loadIndicators();    /* 질문별 실데이터 지표 로드 */
 </script>
 </body>
 </html>

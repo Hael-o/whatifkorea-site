@@ -1,0 +1,221 @@
+{
+  "byCode": {
+    "11": {
+      "name": "서울특별시",
+      "youthRatio": 0.2203,
+      "agingRatio": 0.2089,
+      "workingRatio": 0.665,
+      "share": 0.1819,
+      "riskIndex": 1.054,
+      "fertility": 0.581
+    },
+    "21": {
+      "name": "부산광역시",
+      "youthRatio": 0.1654,
+      "agingRatio": 0.259,
+      "workingRatio": 0.6074,
+      "share": 0.0633,
+      "riskIndex": 0.639,
+      "fertility": 0.683
+    },
+    "22": {
+      "name": "대구광역시",
+      "youthRatio": 0.1695,
+      "agingRatio": 0.2272,
+      "workingRatio": 0.6263,
+      "share": 0.046,
+      "riskIndex": 0.746,
+      "fertility": 0.754
+    },
+    "23": {
+      "name": "인천광역시",
+      "youthRatio": 0.1827,
+      "agingRatio": 0.1945,
+      "workingRatio": 0.6542,
+      "share": 0.0599,
+      "riskIndex": 0.939,
+      "fertility": 0.762
+    },
+    "24": {
+      "name": "광주광역시",
+      "youthRatio": 0.1884,
+      "agingRatio": 0.1926,
+      "workingRatio": 0.6438,
+      "share": 0.0271,
+      "riskIndex": 0.978,
+      "fertility": 0.699
+    },
+    "25": {
+      "name": "대전광역시",
+      "youthRatio": 0.2029,
+      "agingRatio": 0.1968,
+      "workingRatio": 0.6497,
+      "share": 0.0282,
+      "riskIndex": 1.031,
+      "fertility": 0.792
+    },
+    "26": {
+      "name": "울산광역시",
+      "youthRatio": 0.1639,
+      "agingRatio": 0.1935,
+      "workingRatio": 0.6463,
+      "share": 0.0213,
+      "riskIndex": 0.847,
+      "fertility": 0.859
+    },
+    "29": {
+      "name": "세종특별자치시",
+      "youthRatio": 0.1612,
+      "agingRatio": 0.1269,
+      "workingRatio": 0.6388,
+      "share": 0.0077,
+      "riskIndex": 1.27,
+      "fertility": 1.028
+    },
+    "31": {
+      "name": "경기도",
+      "youthRatio": 0.1846,
+      "agingRatio": 0.183,
+      "workingRatio": 0.6571,
+      "share": 0.2692,
+      "riskIndex": 1.009,
+      "fertility": 0.789
+    },
+    "32": {
+      "name": "강원도",
+      "youthRatio": 0.1521,
+      "agingRatio": 0.2755,
+      "workingRatio": 0.5892,
+      "share": 0.0295,
+      "riskIndex": 0.552,
+      "fertility": 0.889
+    },
+    "33": {
+      "name": "충청북도",
+      "youthRatio": 0.1683,
+      "agingRatio": 0.2377,
+      "workingRatio": 0.6155,
+      "share": 0.0313,
+      "riskIndex": 0.708,
+      "fertility": 0.882
+    },
+    "34": {
+      "name": "충청남도",
+      "youthRatio": 0.1578,
+      "agingRatio": 0.2409,
+      "workingRatio": 0.6066,
+      "share": 0.0419,
+      "riskIndex": 0.655,
+      "fertility": 0.883
+    },
+    "35": {
+      "name": "전라북도",
+      "youthRatio": 0.1512,
+      "agingRatio": 0.2724,
+      "workingRatio": 0.5858,
+      "share": 0.0337,
+      "riskIndex": 0.555,
+      "fertility": 0.808
+    },
+    "36": {
+      "name": "전라남도",
+      "youthRatio": 0.1379,
+      "agingRatio": 0.2904,
+      "workingRatio": 0.5699,
+      "share": 0.0347,
+      "riskIndex": 0.475,
+      "fertility": 1.028
+    },
+    "37": {
+      "name": "경상북도",
+      "youthRatio": 0.1373,
+      "agingRatio": 0.2822,
+      "workingRatio": 0.582,
+      "share": 0.0489,
+      "riskIndex": 0.486,
+      "fertility": 0.897
+    },
+    "38": {
+      "name": "경상남도",
+      "youthRatio": 0.1423,
+      "agingRatio": 0.2399,
+      "workingRatio": 0.6083,
+      "share": 0.0626,
+      "riskIndex": 0.593,
+      "fertility": 0.82
+    },
+    "39": {
+      "name": "제주특별자치도",
+      "youthRatio": 0.1574,
+      "agingRatio": 0.2055,
+      "workingRatio": 0.6241,
+      "share": 0.013,
+      "riskIndex": 0.766,
+      "fertility": 0.826
+    }
+  },
+  "national": {
+    "youthRatio": 0.1784,
+    "agingRatio": 0.218,
+    "workingRatio": 0.6349,
+    "share": 1.0,
+    "fertility": 0.748
+  },
+  "questions": {
+    "q_settle": {
+      "key": "youthRatio",
+      "label": "청년(20-34) 비율",
+      "source": "행안부 주민등록 2026-05",
+      "unit": "%",
+      "digits": 1,
+      "good": "high",
+      "kind": "ratio"
+    },
+    "q_relocate": {
+      "key": "share",
+      "label": "전국 인구 점유율",
+      "source": "행안부 주민등록 2026-05",
+      "unit": "%",
+      "digits": 1,
+      "good": "low",
+      "kind": "ratio"
+    },
+    "q_leave": {
+      "key": "fertility",
+      "label": "합계출산율",
+      "source": "KOSIS 인구동향조사 2024",
+      "unit": "명",
+      "digits": 3,
+      "good": "high",
+      "kind": "num"
+    },
+    "q_retire": {
+      "key": "agingRatio",
+      "label": "고령화율(65+)",
+      "source": "행안부 주민등록 2026-05",
+      "unit": "%",
+      "digits": 1,
+      "good": "low",
+      "kind": "ratio"
+    },
+    "q_immig": {
+      "key": "workingRatio",
+      "label": "생산연령(20-64) 비중",
+      "source": "행안부 주민등록 2026-05",
+      "unit": "%",
+      "digits": 1,
+      "good": "high",
+      "kind": "ratio"
+    },
+    "q_4day": {
+      "key": "fertility",
+      "label": "합계출산율",
+      "source": "KOSIS 인구동향조사 2024",
+      "unit": "명",
+      "digits": 3,
+      "good": "high",
+      "kind": "num"
+    }
+  },
+  "note": "시도별 지표 · 다중 출처(행안부 주민등록 + KOSIS 인구동향)"
+}
