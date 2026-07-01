@@ -1,0 +1,22 @@
+/* Data-If Korea — 로컬 폰트 번들 (CDN 의존 제거) */
+@font-face{
+  font-family:'Pretendard Variable';
+  font-weight:45 920;
+  font-style:normal;
+  font-display:swap;
+  src:url('./fonts/PretendardVariable.woff2') format('woff2-variations');
+}
+@font-face{
+  font-family:'JetBrains Mono';
+  font-weight:400;
+  font-style:normal;
+  font-display:swap;
+  src:url('./fonts/JetBrainsMono-400.woff2') format('woff2');
+}
+@font-face{
+  font-family:'JetBrains Mono';
+  font-weight:700;
+  font-style:normal;
+  font-display:swap;
+  src:url('./fonts/JetBrainsMono-700.woff2') format('woff2');
+}

@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Data-If Korea · 지방소멸 시뮬레이터</title>
+<link rel="stylesheet" href="./assets/fonts.css" />
+<link href="./assets/vendor/maplibre-gl.css" rel="stylesheet" />
+<style>
+/* ============================================================
+   Data-If Korea — 라이트·글래스 (원본 디자인 언어 계승)
+   지도 전체 배경 + 흰 글래스 플로팅 패널 · 코발트 액센트
+   ============================================================ */
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f3f5f8; --surface-3:#e8edf3;
+  --fg:#161a20; --muted:#697080; --muted-2:#9aa1b0;
+  --border:#e3e7ee; --border-2:#d5dbe4;
+  --accent:#7c5cff; --accent-strong:#5b44d6; --accent-tint:#efecff; --accent-text:#5b44d6;
+  --pos:#10b981; --pos-tint:#e7f7f1; --pos-text:#0a8f68;
+  --neg:#e5484d; --neg-tint:#fdecec; --neu:#9aa0a6; --neu-tint:#eef0f3;
+  --warn:#d98a00; --warn-tint:#fdf3e0;
+  --shadow:0 4px 18px rgba(20,28,45,.09),0 1px 4px rgba(20,28,45,.05);
+  --shadow-lg:0 16px 44px rgba(20,28,45,.15),0 4px 12px rgba(20,28,45,.07);
+  --font:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',system-ui,sans-serif;
+  --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
+  --r-panel:16px; --r-field:10px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--font);color:var(--fg);background:var(--bg);font-size:15px;line-height:1.55;
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;overflow:hidden}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+button{font-family:inherit;cursor:pointer;color:inherit}
+input,select{font-family:inherit}
+::selection{background:var(--accent-tint)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lbl{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+.glass{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);box-shadow:var(--shadow)}
+
+#map{position:fixed;inset:0;background:var(--bg)}
+.map-fallback{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted-2);z-index:0;
+  background:radial-gradient(1200px 800px at 50% 30%,#fff,transparent 70%),var(--bg)}
+
+/* ---- titlebar ---- */
+.titlebar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:11px;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:9px 17px 9px 11px;box-shadow:var(--shadow)}
+.titlebar .mk{width:32px;height:32px;flex:0 0 auto;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-family:var(--mono);font-weight:800}
+.titlebar .tt{font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
+.titlebar .tt b{color:var(--accent-text)}
+.titlebar .tt small{display:block;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
+.titlebar .stat{margin-left:6px;padding-left:12px;border-left:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);white-space:nowrap}
+.titlebar .stat .ok{color:var(--pos-text)} .titlebar .stat .bad{color:var(--neg)}
+
+/* ---- left control panel ---- */
+.ctrl{position:fixed;top:70px;left:14px;z-index:25;width:300px;max-width:calc(100vw-28px);
+  max-height:calc(100vh-180px);display:flex;flex-direction:column;border-top:3px solid var(--accent)}
+.ctrl-head{display:flex;align-items:center;gap:9px;padding:11px 14px 9px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.ctrl-head .ic{width:28px;height:28px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;color:var(--accent-strong);font-size:15px}
+.ctrl-head h2{font-size:14px;font-weight:700;letter-spacing:-.01em}
+.ctrl-head .c{font-size:11.5px;color:var(--muted)}
+.ctrl-head .cl{margin-left:auto;width:26px;height:26px;border-radius:8px;border:0;background:transparent;color:var(--muted-2)}
+.ctrl-head .cl:hover{background:var(--surface-2)}
+.ctrl-head .cl svg{width:15px;height:15px;transition:transform .2s}
+.ctrl.collapsed .cl svg{transform:rotate(180deg)}
+.ctrl-body{overflow-y:auto;padding:12px 14px 14px;display:grid;gap:12px;scrollbar-width:thin}
+.ctrl.collapsed .ctrl-body{display:none}
+.ctrl-body::-webkit-scrollbar{width:8px}.ctrl-body::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+.field{display:grid;gap:6px}
+.field .row{display:flex;justify-content:space-between;align-items:baseline}
+.field .hint{font-size:10.5px;color:var(--muted-2);font-family:var(--mono)}
+
+.seg{display:flex;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-field);overflow:hidden}
+.seg button{flex:1;border:0;background:transparent;padding:8px 4px;font-size:12px;font-weight:600;color:var(--muted);transition:.12s}
+.seg button.on{background:var(--accent);color:#fff}
+.seg.mini button{padding:6px 4px;font-size:11.5px}
+
+.csel{position:relative}
+.csel .trg{width:100%;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border-2);
+  border-radius:var(--r-field);padding:8px 11px;font-size:13.5px;color:var(--fg);text-align:left}
+.csel .trg .lab{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.csel .trg .cv{width:13px;height:13px;flex:0 0 auto;color:var(--muted);transition:transform .2s}
+.csel.open .trg{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.16)}
+.csel.open .trg .cv{transform:rotate(180deg)}
+.csel-menu{position:fixed;z-index:80;background:var(--surface);border:1px solid var(--border);border-radius:13px;
+  box-shadow:var(--shadow-lg);padding:6px;max-height:280px;overflow-y:auto;scrollbar-width:thin}
+.csel-menu .opt{width:100%;display:flex;align-items:center;gap:8px;padding:9px 11px;border:0;background:transparent;border-radius:9px;font-size:13.5px;color:var(--fg);text-align:left}
+.csel-menu .opt:hover{background:var(--surface-2)}
+.csel-menu .opt.sel{color:var(--accent-text);font-weight:600;background:var(--accent-tint)}
+.csel-menu .opt span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.range-wrap{display:flex;align-items:center;gap:10px}
+input[type=range]{-webkit-appearance:none;flex:1;height:4px;border-radius:99px;background:var(--surface-3);outline:none}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #fff;box-shadow:0 0 0 1px var(--border-2)}
+.numin{width:100%;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-field);padding:8px 10px;font-size:13.5px;font-family:var(--mono)}
+.numin:focus{border-color:var(--accent);outline:none}
+.actions{display:flex;gap:8px}
+.btn{border-radius:var(--r-field);padding:10px;font-size:13px;font-weight:700;border:1px solid transparent;flex:1;transition:.14s}
+.btn.run{background:var(--accent);color:#fff}.btn.run:hover{background:var(--accent-strong)}
+.btn.run:disabled{background:var(--muted-2);cursor:not-allowed}
+.btn.ghost{flex:0 0 auto;background:var(--surface);border-color:var(--border-2);color:var(--fg);padding:10px 12px}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent-text)}
+.metricsel{display:flex;flex-wrap:wrap;gap:5px}
+.metricsel button{font-size:11.5px;padding:6px 9px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface);color:var(--muted)}
+.metricsel button.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-tint);font-weight:600}
+
+/* ---- bottom dock ---- */
+.dock{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:25;width:min(560px,calc(100vw-360px));display:flex;flex-direction:column;gap:9px;align-items:center}
+.chips{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%}
+.chip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 13px;font-size:12.5px;color:var(--fg);box-shadow:var(--shadow);text-align:left;transition:.14s;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.chip:hover{border-color:var(--accent);color:var(--accent-text);transform:translateY(-1px)}
+.chip svg{width:14px;height:14px;color:var(--accent);flex:0 0 auto}
+.chip span{overflow:hidden;text-overflow:ellipsis}
+.askbar{display:flex;align-items:center;gap:8px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 15px;box-shadow:var(--shadow-lg)}
+.askbar input{flex:1;border:0;background:transparent;font-size:13.5px;color:var(--fg);outline:none;padding:6px 0}
+.send{width:36px;height:36px;flex:0 0 auto;border-radius:9px;border:0;background:var(--accent);display:grid;place-items:center;color:#fff}
+.send:hover{background:var(--accent-strong)} .send svg{width:19px;height:19px}
+.send.busy svg{display:none}.send .spin{display:none;width:18px;height:18px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
+.send.busy .spin{display:block}@keyframes sp{to{transform:rotate(360deg)}}
+.dock-cap{font-size:11px;color:var(--muted-2)} .dock-cap b{color:var(--muted);font-weight:600}
+.dock-cap.warn{color:var(--warn)}
+
+/* ---- results panel ---- */
+.results{position:fixed;top:70px;right:16px;z-index:26;width:392px;max-width:calc(100vw-32px);max-height:calc(100vh-108px);
+  display:flex;flex-direction:column;border-top:3px solid var(--accent);
+  transform:translateX(calc(100% + 24px));opacity:0;transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .25s;pointer-events:none}
+.results.on{transform:none;opacity:1;pointer-events:auto}
+.res-head{padding:15px 18px 12px;border-bottom:1px solid var(--border);flex:0 0 auto;position:relative}
+.res-head .q{font-size:14px;font-weight:700;line-height:1.45;padding-right:26px}
+.res-head .meta{margin-top:7px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.res-head .conf{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
+.conf.high{color:var(--pos-text);background:var(--pos-tint)}.conf.medium{color:var(--warn);background:var(--warn-tint)}.conf.low{color:#c0353a;background:var(--neg-tint)}
+.res-head .x{position:absolute;top:13px;right:13px;width:28px;height:28px;border-radius:8px;border:0;background:transparent;color:var(--muted-2)}
+.res-head .x:hover{background:var(--surface-2)}
+.res-body{overflow-y:auto;padding:15px 18px 20px;display:grid;gap:16px;scrollbar-width:thin}
+.res-body::-webkit-scrollbar{width:8px}.res-body::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+.res-sec h3{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mcard{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px}
+.mcard .t{font-size:11px;color:var(--muted)}
+.mcard .v{font-family:var(--mono);font-size:16px;font-weight:700;margin-top:3px}
+.mcard .d{font-family:var(--mono);font-size:11px;margin-top:2px}
+.mcard .d.up{color:var(--pos-text)}.mcard .d.down{color:#c0353a}.mcard .d.flat{color:var(--muted-2)}
+.tone{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.tone button{font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid var(--border-2);background:var(--surface);color:var(--muted)}
+.tone button.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-tint);font-weight:600}
+.rblock{border-left:2px solid var(--border-2);padding:2px 0 2px 12px;margin-bottom:11px;cursor:pointer;transition:.14s}
+.rblock:hover{border-color:var(--accent)}
+.rblock.summary{border-color:var(--accent)}.rblock.insight{border-color:var(--pos)}.rblock.warning{border-color:var(--warn)}.rblock.evidence{border-color:var(--muted-2)}
+.rblock .h{font-size:12px;font-weight:700;margin-bottom:3px}
+.rblock .x{font-size:12.5px;color:#34383d;line-height:1.6}
+.rtbl{width:100%;border-collapse:collapse;font-size:12px}
+.rtbl td{padding:6px 4px;border-bottom:1px solid var(--border)}.rtbl tr:last-child td{border-bottom:0}
+.rtbl .rn{font-weight:600}.rtbl .pcell{text-align:right;font-family:var(--mono)}
+.rtbl .up{color:var(--pos-text)}.rtbl .down{color:#c0353a}
+.evi div{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);color:var(--muted)}
+.evi div:last-child{border:0}.evi b{color:var(--fg);text-align:right;font-weight:600}
+.disc{font-size:11px;line-height:1.55;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px 13px}
+.disc b{color:var(--fg)}
+
+/* ---- map chrome ---- */
+.area-chip{position:fixed;z-index:28;pointer-events:none;transform:translate(-50%,-135%);background:#fff;border:1px solid var(--border-2);border-radius:11px;padding:7px 12px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);white-space:nowrap;opacity:0;transition:opacity .1s}
+.area-chip.on{opacity:1}
+.area-chip .v{display:block;font-size:11px;font-weight:600;color:var(--accent-text);font-family:var(--mono);margin-top:2px}
+.level-pill{position:fixed;top:16px;right:16px;z-index:24;display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:11px;font-weight:600;box-shadow:var(--shadow)}
+.level-pill .dotp{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2.5px var(--accent-tint)}
+.zoom-ctrl{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:24;display:flex;flex-direction:column;gap:8px}
+.zc-seg{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:3px;box-shadow:var(--shadow)}
+.zc-seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
+.zc-seg button:hover{background:var(--surface-2)}.zc-seg button.on{background:var(--accent);color:#fff}
+.zc-seg button:disabled{color:var(--muted-2);opacity:.5;cursor:not-allowed}
+.zc-pm{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);overflow:hidden}
+.zc-pm button{width:34px;height:34px;border:0;background:transparent;font-size:17px;color:var(--fg);display:grid;place-items:center}
+.zc-pm button:first-child{border-bottom:1px solid var(--border)}.zc-pm button:hover{background:var(--surface-2)}
+.legend{position:fixed;left:14px;bottom:20px;z-index:24;padding:10px 13px;min-width:180px}
+.legend .lbl{display:block;margin-bottom:8px}
+.legbar{height:10px;border-radius:6px;margin-bottom:5px}
+.legval{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,12px);z-index:60;opacity:0;background:var(--fg);color:#fff;border-radius:10px;padding:9px 15px;font-size:12.5px;transition:.2s;pointer-events:none;box-shadow:var(--shadow-lg)}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+.maplibregl-popup{display:none}
+
+@media (max-width:900px){
+  .ctrl{top:70px;left:12px;right:12px;width:auto;max-height:44vh}
+  .results{top:auto;bottom:0;left:0;right:0;width:auto;max-width:none;max-height:62vh;border-radius:18px 18px 0 0;transform:translateY(calc(100% + 24px))}
+  .results.on{transform:none}
+  .dock{width:calc(100vw-24px)}.chips{grid-template-columns:1fr}.chip:nth-child(n+3){display:none}
+  .legend{display:none}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div class="map-fallback" id="mapFallback"><span>지도 로딩 중…</span></div>
+
+<div class="titlebar">
+  <div class="mk">D</div>
+  <div class="tt">Data-<b>If</b> Korea<small>지방소멸 시뮬레이터</small></div>
+  <div class="stat" id="hstat">서버 확인 중…</div>
+</div>
+
+<!-- left control panel -->
+<aside class="glass ctrl" id="ctrl">
+  <div class="ctrl-head">
+    <div class="ic">◧</div>
+    <div><h2>시나리오 파라미터</h2><div class="c" id="ctrlSub">청년 인구 이동 · 시·도</div></div>
+    <button class="cl" id="ctrlToggle" aria-label="접기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg></button>
+  </div>
+  <div class="ctrl-body">
+    <div class="field"><span class="lbl">시나리오 유형</span>
+      <div class="seg" id="opseg"><button data-op="move" class="on">이동</button><button data-op="increase">증가</button><button data-op="decrease">감소</button></div>
+    </div>
+    <div class="field" id="fromField"><span class="lbl" id="fromLbl">출발 지역</span><div class="csel" id="fromSel"></div></div>
+    <div class="field" id="toField"><span class="lbl">도착 지역</span><div class="csel" id="toSel"></div></div>
+    <div class="field"><span class="lbl">연령대</span>
+      <div class="seg mini" id="ageseg"><button data-age="0-19">유소년</button><button data-age="20-34" class="on">청년</button><button data-age="35-64">중장년</button><button data-age="65+">고령</button></div>
+    </div>
+    <div class="field">
+      <div class="row"><span class="lbl">변화 규모</span><span class="hint" id="unitHint">명</span></div>
+      <div class="range-wrap"><input type="range" id="valRange" min="0" max="200000" step="5000" value="50000"><input class="numin" id="valNum" style="width:96px" value="50000"></div>
+      <div class="seg mini" id="unitseg" style="margin-top:2px"><button data-u="people" class="on">명</button><button data-u="percent">%</button></div>
+    </div>
+    <div class="actions">
+      <button class="btn run" id="runBtn">시뮬레이션 실행</button>
+      <button class="btn ghost" id="resetBtn">초기화</button>
+    </div>
+    <div class="field"><span class="lbl">지도 지표</span>
+      <div class="metricsel" id="metricSel"></div>
+      <div class="seg mini" id="modeTog" style="margin-top:6px"><button data-m="base" class="on">기준값</button><button data-m="delta">변화량</button></div>
+    </div>
+  </div>
+</aside>
+
+<!-- bottom dock -->
+<div class="dock" id="dock">
+  <div class="chips" id="chips"></div>
+  <div class="askbar">
+    <input id="ask" placeholder="예: 서울 청년 5만 명이 세종으로 이동하면?" autocomplete="off">
+    <button class="send" id="sendBtn" aria-label="실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><span class="spin"></span></button>
+  </div>
+  <div class="dock-cap" id="dockCap">결정론적 엔진 계산 · LLM은 숫자를 만들지 않습니다</div>
+</div>
+
+<!-- results -->
+<aside class="glass results" id="results">
+  <div class="res-head">
+    <button class="x" id="resClose" aria-label="닫기"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+    <div class="q" id="resQ">—</div>
+    <div class="meta" id="resMeta"></div>
+  </div>
+  <div class="res-body" id="resBody"></div>
+</aside>
+
+<div class="area-chip" id="areaChip"></div>
+<div class="level-pill" id="levelPill"><span class="dotp"></span>시·도 단위</div>
+<div class="zoom-ctrl">
+  <div class="zc-seg" id="zcSeg">
+    <button data-lv="sido" class="on">시·도</button>
+    <button data-lv="sgg" id="sggBtn">시·군·구</button>
+  </div>
+  <div class="zc-pm"><button id="zcIn">+</button><button id="zcOut">−</button></div>
+</div>
+<div class="glass legend" id="legend">
+  <span class="lbl" id="legTitle">청년 비율</span>
+  <div class="legbar" id="legBar"></div>
+  <div class="legval"><span id="legMin">–</span><span id="legMax">–</span></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="./assets/vendor/maplibre-gl.js"></script>
+<script src="./assets/app-engine.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+
+/* ---- metric metadata ---- */
+const METRICS={
+  youthRatio:{label:'청년 비율',kind:'ratio'}, agingRatio:{label:'고령화율',kind:'ratio'},
+  dependencyRatio:{label:'부양비',kind:'ratio2'}, density:{label:'인구밀도',kind:'dens'},
+  riskIndex:{label:'소멸위험',kind:'ratio2'}, total:{label:'총인구',kind:'int'},
+};
+function fmt(k,v){ if(v==null||isNaN(v))return '–';
+  if(k==='ratio')return (v*100).toFixed(1)+'%'; if(k==='ratio2')return v.toFixed(2);
+  if(k==='dens')return Math.round(v).toLocaleString('ko')+'/㎢'; return Math.round(v).toLocaleString('ko'); }
+function fmtD(k,v){ if(v==null||isNaN(v))return '–'; const s=v>0?'+':'';
+  if(k==='ratio')return s+(v*100).toFixed(2)+'%p'; if(k==='ratio2')return s+v.toFixed(3);
+  if(k==='dens')return s+Math.round(v).toLocaleString('ko')+'/㎢'; return s+Math.round(v).toLocaleString('ko'); }
+
+/* ---- state ---- */
+let HEALTH=null, LEVEL='sido', REG={}, GEO={}, SIM=null, map=null, mapReady=false;
+let curMetric='youthRatio', curMode='base', curTone='general';
+let op={type:'move', from:'11', to:'29', age:'20-34', value:50000, unit:'people'};
+const short=n=>n.replace(/(특별자치시|특별자치도|특별시|광역시|자치시|자치도|시|도)$/,'')||n;
+
+/* ---- color ---- */
+function hx(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
+function mix(a,b,t){const A=hx(a),B=hx(b);return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`;}
+function seq(t){t=Math.max(0,Math.min(1,t));return t<.5?mix('#f0edff','#a48bff',t*2):mix('#a48bff','#5b44d6',(t-.5)*2);}
+function dv(t){return t>=0?mix('#eef0f3','#10b981',Math.min(1,t)):mix('#eef0f3','#e5484d',Math.min(1,-t));}
+
+function curReg(){return REG[LEVEL];}
+function hasData(){return curReg() && curReg().hasData;}
+function valueFor(code){
+  if(curMode==='delta'){ if(!SIM||!SIM.areas[code])return null; return SIM.areas[code].delta[curMetric]; }
+  const a=curReg().areas[code]; return a&&a.metrics?a.metrics[curMetric]:null;
+}
+
+/* ---- map ---- */
+function initMap(){
+  if(!window.maplibregl)return false;
+  map=new maplibregl.Map({container:'map',attributionControl:false,
+    style:{version:8,sources:{carto:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],tileSize:256,attribution:'© OpenStreetMap · © CARTO'}},
+      layers:[{id:'bg',type:'background',paint:{'background-color':'#dbe4ef'}},{id:'carto',type:'raster',source:'carto'}]},
+    center:[127.7,36.2],zoom:6.1,minZoom:5,maxZoom:11,maxBounds:[[122,32],[132.5,39.6]],dragRotate:false,renderWorldCopies:false});
+  map.addControl(new maplibregl.AttributionControl({compact:true}));
+  map.on('load',()=>{
+    $('mapFallback').style.display='none';
+    map.addSource('admin',{type:'geojson',data:GEO[LEVEL],generateId:true});
+    map.addLayer({id:'fill',type:'fill',source:'admin',paint:{'fill-color':['coalesce',['get','color'],'#c7cede'],'fill-opacity':0.72}});
+    map.addLayer({id:'line',type:'line',source:'admin',paint:{'line-color':'rgba(91,68,214,.45)','line-width':0.7}});
+    map.addLayer({id:'hl',type:'line',source:'admin',filter:['==','code',''],paint:{'line-color':'#5b44d6','line-width':2.6}});
+    mapReady=true; wireMap(); repaint();
+  });
+  return true;
+}
+function repaint(){
+  if(!mapReady||!GEO[LEVEL])return;
+  const g=GEO[LEVEL], kind=METRICS[curMetric].kind;
+  const vals=g.features.map(f=>valueFor(f.properties.code)).filter(v=>v!=null&&!isNaN(v));
+  const lo=vals.length?Math.min(...vals):0, hi=vals.length?Math.max(...vals):1;
+  const maxAbs=Math.max(Math.abs(lo),Math.abs(hi))||1;
+  g.features.forEach(f=>{
+    const v=valueFor(f.properties.code); let color='#c7cede';
+    if(v!=null&&!isNaN(v)) color=curMode==='delta'?dv(v/maxAbs):seq(hi>lo?(v-lo)/(hi-lo):.5);
+    f.properties.color=color;
+  });
+  if(map.getSource('admin'))map.getSource('admin').setData(g);
+  $('legTitle').textContent=METRICS[curMetric].label+(curMode==='delta'?' · 변화량':'');
+  if(!vals.length){ $('legBar').style.background='var(--surface-3)'; $('legMin').textContent='데이터 준비중'; $('legMax').textContent=''; return; }
+  if(curMode==='delta'){ $('legBar').style.background=`linear-gradient(90deg,${dv(-1)},${dv(0)},${dv(1)})`; $('legMin').textContent=fmtD(kind,-maxAbs); $('legMax').textContent=fmtD(kind,maxAbs); }
+  else { $('legBar').style.background=`linear-gradient(90deg,${seq(0)},${seq(.5)},${seq(1)})`; $('legMin').textContent=fmt(kind,lo); $('legMax').textContent=fmt(kind,hi); }
+}
+function wireMap(){
+  const chip=$('areaChip');
+  map.on('mousemove','fill',e=>{
+    const f=e.features[0]; if(!f)return; map.getCanvas().style.cursor='pointer';
+    const code=f.properties.code; map.setFilter('hl',['==','code',code]);
+    const a=curReg().areas[code]; const kind=METRICS[curMetric].kind; const v=valueFor(code);
+    chip.innerHTML=`${short(a?a.name:f.properties.name)}<span class="v">${curMode==='delta'?fmtD(kind,v):fmt(kind,v)}</span>`;
+    chip.style.left=e.originalEvent.clientX+'px'; chip.style.top=e.originalEvent.clientY+'px'; chip.classList.add('on');
+  });
+  map.on('mouseleave','fill',()=>{map.getCanvas().style.cursor='';map.setFilter('hl',['==','code','']);chip.classList.remove('on');});
+  map.on('click','fill',e=>{
+    const code=e.features[0].properties.code; if(!hasData())return;
+    if(op.type==='move'){ if(code===op.from)return; op.to=code; } else { op.from=code; }
+    syncControls(); toast(`${short(curReg().areas[code].name)} 선택`);
+  });
+}
+async function switchLevel(lv){
+  if(lv===LEVEL)return;
+  LEVEL=lv; SIM=null; curMode='base';
+  document.querySelectorAll('#zcSeg button').forEach(b=>b.classList.toggle('on',b.dataset.lv===lv));
+  document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));
+  $('levelPill').innerHTML=`<span class="dotp"></span>${lv==='sido'?'시·도':'시·군·구'} 단위`;
+  $('ctrlSub').textContent='청년 인구 이동 · '+(lv==='sido'?'시·도':'시·군·구');
+  await loadLevel(lv);
+  if(map.getSource('admin'))map.getSource('admin').setData(GEO[lv]);
+  buildRegionSelects(); syncControls(); repaint();
+  map.easeTo({zoom:lv==='sgg'?7.4:6.1,duration:600});
+  if(!hasData()){ $('runBtn').disabled=true; $('dockCap').className='dock-cap warn'; $('dockCap').textContent='시·군·구 인구 데이터 준비 중 — 경계·이름만 표시(시뮬레이션은 시·도에서)'; }
+  else { $('runBtn').disabled=false; $('dockCap').className='dock-cap'; $('dockCap').textContent='결정론적 엔진 계산 · LLM은 숫자를 만들지 않습니다'; }
+}
+async function loadLevel(lv){
+  if(REG[lv]&&GEO[lv])return;
+  const geoP=fetch(`./data/${lv}.geojson`).then(r=>r.json());
+  const popFile=lv==='sido'?'population.json':'population_sgg.json';
+  let reg;
+  try{
+    const p=await fetch(`./data/${popFile}`); if(!p.ok)throw 0;
+    const pop=await p.json();
+    const areas={};
+    for(const c in pop.areas){const a=pop.areas[c];
+      areas[c]={code:c,name:a.name,total:a.total,bands:a.bands,area_km2:a.area_km2,sido:a.sido||c.slice(0,2),metrics:DataIfEngine.metrics(a)};}
+    reg={level:lv,hasData:true,baseYear:pop.baseYear,basePeriod:pop.basePeriod,source:pop.source,ageBands:pop.ageBands,areas};
+  }catch(e){
+    // 인구 데이터 없음(예: 시군구 미탑재) → 경계·이름만
+    const g=await geoP; const areas={};
+    g.features.forEach(f=>{const p=f.properties;areas[p.code]={code:p.code,name:p.name,sido:p.sido||p.code.slice(0,2),total:null,metrics:null};});
+    REG[lv]={level:lv,hasData:false,source:'경계: southkorea-maps(통계청 2018) · 인구 데이터 준비 중',areas};
+    GEO[lv]=g; return;
+  }
+  GEO[lv]=await geoP; REG[lv]=reg;
+}
+
+/* ---- custom select ---- */
+const CV='<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
+let openSel=null;
+function makeSelect(host,opts,value,onChange){
+  host.classList.add('csel'); host.innerHTML=`<button class="trg" type="button"><span class="lab"></span>${CV}</button>`;
+  const trg=host.querySelector('.trg'),lab=host.querySelector('.lab'); let val=value,menu=null;
+  const labelOf=v=>{const o=opts.find(o=>o.v===v);return o?o.l:'선택';};
+  function setVal(v,fire){val=v;host.dataset.value=v;lab.textContent=labelOf(v);if(fire&&onChange)onChange(v);}
+  function close(){if(!menu)return;menu.remove();menu=null;host.classList.remove('open');document.removeEventListener('mousedown',od,true);openSel=null;}
+  function od(e){if(menu&&!menu.contains(e.target)&&!host.contains(e.target))close();}
+  function open(){ if(openSel)openSel(); menu=document.createElement('div');menu.className='csel-menu';
+    menu.innerHTML=opts.map(o=>`<button class="opt${o.v===val?' sel':''}" data-v="${o.v}"><span>${o.l}</span></button>`).join('');
+    document.body.appendChild(menu); const r=trg.getBoundingClientRect();
+    menu.style.left=r.left+'px';menu.style.width=Math.max(r.width,160)+'px';
+    const mh=menu.offsetHeight; menu.style.top=(r.bottom+6+mh>innerHeight-12&&r.top-6-mh>12?r.top-6-mh:r.bottom+6)+'px';
+    host.classList.add('open');
+    menu.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{setVal(b.dataset.v,true);close();});
+    setTimeout(()=>document.addEventListener('mousedown',od,true),0); openSel=close; }
+  trg.onclick=e=>{e.stopPropagation();host.classList.contains('open')?close():open();};
+  setVal(value,false); return {set:v=>setVal(v,false),get:()=>val};
+}
+let FROMS,TOS;
+function buildRegionSelects(){
+  const areas=Object.values(curReg().areas).sort((a,b)=>a.code.localeCompare(b.code));
+  const opts=areas.map(a=>({v:a.code,l:a.name}));
+  if(!areas.find(a=>a.code===op.from))op.from=areas[0].code;
+  if(!areas.find(a=>a.code===op.to))op.to=areas[Math.min(1,areas.length-1)].code;
+  FROMS=makeSelect($('fromSel'),opts,op.from,v=>{op.from=v;});
+  TOS=makeSelect($('toSel'),opts,op.to,v=>{op.to=v;});
+}
+function syncControls(){
+  if(FROMS)FROMS.set(op.from); if(TOS)TOS.set(op.to);
+  $('valNum').value=op.value; $('valRange').value=Math.min(op.value,+$('valRange').max);
+  $('unitHint').textContent=op.unit==='percent'?'%':'명';
+  document.querySelectorAll('#opseg button').forEach(b=>b.classList.toggle('on',b.dataset.op===op.type));
+  document.querySelectorAll('#ageseg button').forEach(b=>b.classList.toggle('on',b.dataset.age===op.age));
+  document.querySelectorAll('#unitseg button').forEach(b=>b.classList.toggle('on',b.dataset.u===op.unit));
+  const mv=op.type==='move'; $('toField').style.display=mv?'':'none'; $('fromLbl').textContent=mv?'출발 지역':'대상 지역';
+}
+function buildOps(){
+  op.value=+$('valNum').value||0;
+  if(op.type==='move')return [{type:'move_population',fromAreaCode:op.from,toAreaCode:op.to,ageGroup:op.age,value:op.value,unit:op.unit}];
+  const t=op.type==='increase'?'increase_population':'decrease_population';
+  return [{type:t,targetAreaCode:op.from,ageGroup:op.age,value:op.value,unit:op.unit}];
+}
+
+/* ---- run ---- */
+function baseOf(){const r=curReg();return {baseYear:r.baseYear,basePeriod:r.basePeriod,source:r.source,areas:r.areas};}
+function run(){
+  if(!hasData()){toast('이 단위는 인구 데이터가 준비 중입니다');return;}
+  const ops=buildOps();
+  if(op.type==='move'&&op.from===op.to){toast('출발/도착 지역이 같습니다');return;}
+  if(!op.value){toast('변화 규모를 입력하세요');return;}
+  try{
+    const result=DataIfEngine.run(baseOf(),ops);
+    const report=DataIfEngine.buildReport(result,ops,curTone);
+    SIM=result; renderResults(report,result,ops);
+    curMode='delta'; document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='delta'));
+    repaint(); toast('계산 완료');
+  }catch(e){toast('계산 오류');console.error(e);}
+}
+function rerunTone(){ if(!SIM)return; renderReport(DataIfEngine.buildReport(SIM,buildOps(),curTone)); }
+
+function renderResults(report,result,ops){
+  const c=result.confidence, top=result.topImpactedAreas;
+  $('resQ').textContent=report.summary;
+  $('resMeta').innerHTML=`<span class="conf ${c.grade}">신뢰도 ${({high:'높음',medium:'보통',low:'낮음'})[c.grade]}</span><span>기준 ${result.basePeriod||result.baseYear}</span>`;
+  const cards=top.slice(0,4).map(a=>{const d=result.areas[a.code],dl=d.delta.total,cls=dl>0?'up':dl<0?'down':'flat',ar=dl>0?'▲':dl<0?'▼':'—';
+    return `<div class="mcard"><div class="t">${short(a.name)} 총인구</div><div class="v num">${d.after.total.toLocaleString('ko')}</div><div class="d ${cls} num">${ar} ${Math.abs(dl).toLocaleString('ko')} · 청년 ${fmtD('ratio',d.delta.youthRatio)}</div></div>`;}).join('')||'<div class="disc">변화 없음</div>';
+  const rows=top.slice(0,8).map(a=>{const cls=a.deltaTotal>0?'up':a.deltaTotal<0?'down':'';
+    return `<tr><td class="rn">${short(a.name)}</td><td class="pcell ${cls}">${a.deltaTotal>0?'+':''}${a.deltaTotal.toLocaleString('ko')}</td><td class="pcell ${a.deltaYouthRatio>0?'up':a.deltaYouthRatio<0?'down':''}">${fmtD('ratio',a.deltaYouthRatio)}</td></tr>`;}).join('');
+  $('resBody').innerHTML=`
+    <div class="res-sec"><h3>전/후 비교 (영향 상위)</h3><div class="cards">${cards}</div></div>
+    <div class="res-sec"><h3>AI 리포트</h3>
+      <div class="tone" id="toneSel"><button data-t="general" class="on">일반</button><button data-t="article">기사</button><button data-t="policy">정책</button><button data-t="exec">경영진</button></div>
+      <div id="report"></div></div>
+    <div class="res-sec"><h3>지역별 변화 · 청년비율</h3><table class="rtbl"><tbody>${rows}</tbody></table></div>
+    <div class="res-sec"><h3>근거 데이터</h3><div class="evi" id="evi"></div></div>
+    <div class="disc"><b>참고 ·</b> 미래 예측이 아니라 입력 가정과 공개 통계 기반 단순 시뮬레이션입니다. 일자리·주택·교통·정책 등 외부 변수는 미반영.</div>`;
+  document.querySelectorAll('#toneSel button').forEach(b=>b.onclick=()=>{curTone=b.dataset.t;document.querySelectorAll('#toneSel button').forEach(x=>x.classList.toggle('on',x===b));rerunTone();});
+  renderReport(report); renderEvidence(result,ops);
+  $('results').classList.add('on');
+}
+function renderReport(report){
+  $('report').innerHTML=report.blocks.map(b=>`<div class="rblock ${b.type}" data-codes="${(b.linkedAreaCodes||[]).filter(Boolean).join(',')}"><div class="h">${b.title}</div><div class="x">${b.text}</div></div>`).join('');
+  document.querySelectorAll('.rblock').forEach(el=>el.onclick=()=>{
+    const codes=(el.dataset.codes||'').split(',').filter(Boolean); if(!codes.length)return;
+    map.setFilter('hl',['in','code',...codes]);
+    const f=GEO[LEVEL].features.find(f=>f.properties.code===codes[0]); if(f&&f.properties.centroid)map.flyTo({center:f.properties.centroid,zoom:LEVEL==='sgg'?8:6.6});
+  });
+}
+function renderEvidence(result,ops){
+  const nm=c=>result.areas[c]?result.areas[c].name:c;
+  const txt=ops.map(o=>{const vs=o.unit==='percent'?o.value+'%':(+o.value).toLocaleString('ko')+'명';
+    if(o.type==='move_population')return `${nm(o.fromAreaCode)}→${nm(o.toAreaCode)} ${o.ageGroup} ${vs} 이동`;
+    return `${nm(o.targetAreaCode)} ${o.ageGroup} ${vs} ${o.type==='increase_population'?'증가':'감소'}`;}).join(' · ');
+  const rows=[['데이터',result.source],['기준',result.basePeriod||result.baseYear],['지역 단위',LEVEL==='sido'?'시·도':'시·군·구'],
+    ['적용 가정',txt],['계산','결정론적 엔진(Python)'],['신뢰도',({high:'높음',medium:'보통',low:'낮음'})[result.confidence.grade]+` (${result.confidence.score})`],['미반영','일자리·주택·교통·정책·자연증감']];
+  $('evi').innerHTML=rows.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('');
+}
+
+/* ---- NL ---- */
+function sendNL(text){
+  if(!text.trim())return; if(LEVEL!=='sido'){toast('자연어 입력은 시·도 단위 · 시·군·구는 지도 클릭/선택으로');return;}
+  const d=DataIfEngine.parse(text);
+  if(!d.isSupported){toast(d.unsupportedReason);return;}
+  if(d.needClarification){toast(d.clarificationQuestion);return;}
+  const o=d.operations[0];
+  op.type={move_population:'move',increase_population:'increase',decrease_population:'decrease'}[o.type];
+  op.from=o.fromAreaCode||o.targetAreaCode; op.to=o.toAreaCode||op.to; op.age=o.ageGroup; op.value=o.value; op.unit=o.unit;
+  syncControls(); run();
+}
+
+/* ---- templates ---- */
+const TPL=['서울 청년 5만 명이 세종으로 이동하면?','서울 청년 10%가 경기로 이동하면?','부산 청년 인구가 10% 감소하면?','전북 청년 인구가 3만 명 증가하면?'];
+function renderChips(){
+  $('chips').innerHTML=TPL.map(t=>`<button class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span>${t}</span></button>`).join('');
+  document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const t=b.textContent.trim();$('ask').value=t;sendNL(t);});
+}
+
+/* ---- toast ---- */
+let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2400);}
+
+/* ---- wire ---- */
+function wire(){
+  $('sendBtn').onclick=()=>sendNL($('ask').value);
+  $('ask').addEventListener('keydown',e=>{if(e.key==='Enter')sendNL($('ask').value);});
+  $('runBtn').onclick=run;
+  $('resetBtn').onclick=()=>{op={type:'move',from:'11',to:'29',age:'20-34',value:50000,unit:'people'};SIM=null;curMode='base';
+    if(LEVEL!=='sido')return switchLevel('sido');
+    document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));
+    syncControls();repaint();$('results').classList.remove('on');toast('초기화됨');};
+  document.querySelectorAll('#opseg button').forEach(b=>b.onclick=()=>{op.type=b.dataset.op;syncControls();});
+  document.querySelectorAll('#ageseg button').forEach(b=>b.onclick=()=>{op.age=b.dataset.age;syncControls();});
+  document.querySelectorAll('#unitseg button').forEach(b=>b.onclick=()=>{op.unit=b.dataset.u;
+    $('valRange').max=op.unit==='percent'?100:200000; $('valRange').step=op.unit==='percent'?1:5000;
+    if(op.unit==='percent'&&op.value>100)op.value=10; syncControls();});
+  $('valRange').addEventListener('input',e=>{op.value=+e.target.value;$('valNum').value=op.value;});
+  $('valNum').addEventListener('input',e=>{op.value=+e.target.value||0;$('valRange').value=Math.min(op.value,+$('valRange').max);});
+  document.querySelectorAll('#modeTog button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='delta'&&!SIM){toast('먼저 시뮬레이션 실행');return;}curMode=b.dataset.m;document.querySelectorAll('#modeTog button').forEach(x=>x.classList.toggle('on',x===b));repaint();});
+  document.querySelectorAll('#zcSeg button').forEach(b=>b.onclick=()=>switchLevel(b.dataset.lv));
+  $('zcIn').onclick=()=>map.easeTo({zoom:Math.min(map.getZoom()+1,11),duration:300});
+  $('zcOut').onclick=()=>map.easeTo({zoom:Math.max(map.getZoom()-1,5),duration:300});
+  $('ctrlToggle').onclick=()=>$('ctrl').classList.toggle('collapsed');
+  $('resClose').onclick=()=>{$('results').classList.remove('on');SIM=null;curMode='base';document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));repaint();};
+  $('metricSel').innerHTML=Object.entries(METRICS).map(([k,m])=>`<button data-k="${k}" class="${k===curMetric?'on':''}">${m.label}</button>`).join('');
+  document.querySelectorAll('#metricSel button').forEach(b=>b.onclick=()=>{curMetric=b.dataset.k;document.querySelectorAll('#metricSel button').forEach(x=>x.classList.toggle('on',x===b));repaint();});
+}
+
+/* ---- boot ---- */
+async function boot(){
+  try{ await loadLevel('sido'); }
+  catch(e){ $('hstat').innerHTML='<span class="bad">●</span> 데이터 로드 실패'; toast('데이터 로드 실패'); return; }
+  const r=curReg();
+  $('hstat').innerHTML=`<span class="ok">●</span> ${Object.keys(r.areas).length}개 시·도 · ${r.basePeriod||r.baseYear}`;
+  loadLevel('sgg').then(()=>{ if(!(REG.sgg&&REG.sgg.hasData))$('sggBtn').title='인구 데이터 준비 중'; }).catch(()=>{});
+  buildRegionSelects(); syncControls(); renderChips(); wire(); initMap();
+  const q=new URLSearchParams(location.search).get('q'); if(q){$('ask').value=q;setTimeout(()=>sendNL(q),700);}
+}
+boot();
+</script>
+</body>
+</html>
