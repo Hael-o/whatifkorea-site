@@ -3,25 +3,34 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Data-If Korea · 지방소멸 시뮬레이터</title>
-<link rel="stylesheet" href="./assets/fonts.css" />
-<link href="./assets/vendor/maplibre-gl.css" rel="stylesheet" />
+<title>만약 대한민국이라면 · 페르소나 의견 탐색</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
 <style>
 /* ============================================================
-   Data-If Korea — 라이트·글래스 (원본 디자인 언어 계승)
-   지도 전체 배경 + 흰 글래스 플로팅 패널 · 코발트 액센트
+   만약 대한민국이라면 — design tokens
+   자체 아이덴티티: 코발트 액센트 · 쿨 뉴트럴 · 각진 대시보드 셰입
+   (레퍼런스와 같은 장르, 다른 디자인 언어)
    ============================================================ */
 :root{
-  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f3f5f8; --surface-3:#e8edf3;
-  --fg:#161a20; --muted:#697080; --muted-2:#9aa1b0;
-  --border:#e3e7ee; --border-2:#d5dbe4;
-  --accent:#7c5cff; --accent-strong:#5b44d6; --accent-tint:#efecff; --accent-text:#5b44d6;
-  --pos:#10b981; --pos-tint:#e7f7f1; --pos-text:#0a8f68;
-  --neg:#e5484d; --neg-tint:#fdecec; --neu:#9aa0a6; --neu-tint:#eef0f3;
-  --warn:#d98a00; --warn-tint:#fdf3e0;
+  --bg:#eef1f5;
+  --surface:#ffffff;
+  --surface-2:#f3f5f8;
+  --surface-3:#e8edf3;
+  --fg:#161a20;
+  --muted:#697080;
+  --muted-2:#9aa1b0;
+  --border:#e3e7ee;
+  --border-2:#d5dbe4;
+  --accent:#7c5cff;
+  --accent-strong:#5b44d6;
+  --accent-tint:#efecff;
+  --accent-text:#5b44d6;
+  --pro:#10b981;     --pro-tint:#e7f7f1;  --pro-text:#0a8f68;
+  --con:#e5484d;     --con-tint:#fdecec;
+  --neu:#9aa0a6;     --neu-tint:#eef0f3;
   --shadow:0 4px 18px rgba(20,28,45,.09),0 1px 4px rgba(20,28,45,.05);
   --shadow-lg:0 16px 44px rgba(20,28,45,.15),0 4px 12px rgba(20,28,45,.07);
-  --font:'Pretendard Variable','Pretendard',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo',system-ui,sans-serif;
+  --font:'Pretendard','Pretendard Variable',-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;
   --mono:'JetBrains Mono','SF Mono',ui-monospace,Menlo,monospace;
   --r-panel:16px; --r-field:10px;
 }
@@ -35,198 +44,319 @@ input,select{font-family:inherit}
 ::selection{background:var(--accent-tint)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .lbl{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+
+/* ---- map canvas ---- */
+#map{position:fixed;inset:0;background:var(--bg)}
+#map .maplibregl-canvas{filter:none}
+#map .maplibregl-ctrl-attrib,#map .maplibregl-ctrl-bottom-right{opacity:.5}
+.map-fallback{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted-2);
+  background:radial-gradient(1200px 800px at 50% 30%,#fff,transparent 70%),var(--bg);z-index:0}
+.map-fallback span{font-size:13px;letter-spacing:.02em}
+
+/* ---- region marker (maplibre DOM marker) ---- */
+.rmk{position:relative;cursor:pointer}
+.rmk .bub{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid var(--border-2);
+  border-radius:999px;padding:4px 9px 4px 5px;box-shadow:var(--shadow);white-space:nowrap;transition:transform .15s,box-shadow .15s}
+.rmk:hover{z-index:5}
+.rmk:hover .bub{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+/* base = 지역 점 마커 (결과 전) — 지도 안 가리게 작은 dot, 이름은 호버 시 */
+.rmk.base .pin{display:block;width:11px;height:11px;border-radius:50%;background:var(--accent);
+  border:2px solid #fff;box-shadow:0 1px 5px rgba(20,28,45,.4);transition:transform .12s}
+.rmk.base .plabel{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);background:var(--fg);color:#fff;
+  font-size:10.5px;font-weight:600;letter-spacing:.01em;padding:2px 8px;border-radius:7px;white-space:nowrap;
+  opacity:0;pointer-events:none;transition:opacity .12s;box-shadow:var(--shadow)}
+.rmk.base:hover{z-index:6}
+.rmk.base:hover .pin{transform:scale(1.3)}
+.rmk.base:hover .plabel{opacity:1}
+/* 행정경계 hover 이름칩 (레퍼런스 Tanglin 칩 스타일) */
+.area-chip{position:fixed;z-index:28;pointer-events:none;transform:translate(-50%,-135%);
+  background:#fff;border:1px solid var(--border-2);border-radius:11px;padding:7px 13px;
+  font-size:13.5px;font-weight:600;color:var(--fg);box-shadow:var(--shadow-lg);white-space:nowrap;
+  opacity:0;transition:opacity .1s}
+.area-chip.on{opacity:1}
+.area-chip .lv{display:block;font-size:9.5px;font-weight:600;letter-spacing:.07em;color:var(--muted);margin-top:1px}
+/* 현재 단위 표시 배지 */
+.level-pill{position:fixed;top:16px;right:16px;z-index:24;display:inline-flex;align-items:center;gap:6px;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 11px;
+  font-size:11px;font-weight:500;color:var(--fg);box-shadow:var(--shadow);letter-spacing:.01em}
+.level-pill .dotp{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2.5px var(--accent-tint)}
+@media (max-width:840px){.level-pill{top:auto;bottom:14px;right:12px}}
+/* 선택한 지역 패널 */
+.sel-panel{position:fixed;left:16px;bottom:22px;z-index:25;width:256px;max-width:calc(100vw - 32px);max-height:38vh;display:flex;flex-direction:column;overflow:hidden}
+.sp-head{display:flex;align-items:center;gap:8px;padding:12px 14px 10px;border-bottom:1px solid var(--border);font-size:12.5px;font-weight:600;flex:0 0 auto}
+.sp-head .sp-n{display:inline-grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-family:var(--mono)}
+.sp-head .sp-clear{margin-left:auto;border:0;background:transparent;color:var(--muted);font-size:11.5px;font-weight:500;padding:2px 4px}
+.sp-head .sp-clear:hover{color:var(--accent-text)}
+.sp-list{overflow-y:auto;padding:10px 12px;display:flex;flex-wrap:wrap;gap:7px;scrollbar-width:thin}
+.selchip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-tint);border:1px solid #d8d0fb;border-radius:999px;padding:5px 6px 5px 10px;font-size:12px;font-weight:500;color:var(--accent-text)}
+.selchip .lv{font-size:9px;letter-spacing:.04em;color:var(--muted);background:#fff;border-radius:5px;padding:1px 5px}
+.selchip .x{width:17px;height:17px;border:0;border-radius:50%;background:rgba(91,68,214,.14);color:var(--accent-strong);font-size:13px;line-height:1;display:grid;place-items:center;cursor:pointer}
+.selchip .x:hover{background:var(--accent);color:#fff}
+@media (max-width:840px){.sel-panel{bottom:auto;top:172px;left:12px}}
+/* 우측 줌/단위 컨트롤 (결과 패널보다 아래 z → 패널 열리면 가려짐) */
+.zoom-ctrl{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:24;display:flex;flex-direction:column;gap:8px}
+.zc-seg{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:3px;box-shadow:var(--shadow)}
+.zc-seg button{border:0;background:transparent;padding:6px 11px;border-radius:8px;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;transition:.12s}
+.zc-seg button:hover{background:var(--surface-2);color:var(--fg)}
+.zc-seg button.on{background:var(--accent);color:#fff}
+.zc-pm{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);overflow:hidden}
+.zc-pm button{width:34px;height:34px;border:0;background:transparent;font-size:17px;font-weight:500;color:var(--fg);display:grid;place-items:center;transition:.12s}
+.zc-pm button:first-child{border-bottom:1px solid var(--border)}
+.zc-pm button:hover{background:var(--surface-2);color:var(--accent-text)}
+@media (max-width:840px){.zoom-ctrl{top:auto;bottom:170px;right:12px}}
+.rmk .dot{width:16px;height:16px;border-radius:50%;flex:0 0 auto;display:grid;place-items:center;
+  font-size:9px;font-weight:700;color:#fff;font-family:var(--mono)}
+.rmk .rn{font-size:11.5px;font-weight:600}
+.rmk .rp{font-size:10.5px;font-family:var(--mono);color:var(--muted)}
+
+/* ============ shared panel chrome ============ */
 .glass{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-panel);box-shadow:var(--shadow)}
 
-#map{position:fixed;inset:0;background:var(--bg)}
-.map-fallback{position:fixed;inset:0;display:grid;place-items:center;color:var(--muted-2);z-index:0;
-  background:radial-gradient(1200px 800px at 50% 30%,#fff,transparent 70%),var(--bg)}
-
-/* ---- titlebar ---- */
+/* ---- top brand lockup (좌상단, 알약 아님) ---- */
 .titlebar{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:30;display:flex;align-items:center;gap:11px;
-  background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:9px 17px 9px 11px;box-shadow:var(--shadow)}
-.titlebar .mk{width:32px;height:32px;flex:0 0 auto;border-radius:9px;background:var(--accent);display:grid;place-items:center;color:#fff;font-family:var(--mono);font-weight:800}
-.titlebar .tt{font-size:14.5px;font-weight:700;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
-.titlebar .tt b{color:var(--accent-text)}
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:9px 16px 9px 11px;box-shadow:var(--shadow)}
+.titlebar .mk{width:32px;height:32px;flex:0 0 auto;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+.titlebar .mk svg{width:18px;height:18px;color:#fff}
+.titlebar .tt{font-size:14.5px;font-weight:600;letter-spacing:-.01em;line-height:1.15;white-space:nowrap}
+.titlebar .tt b{color:var(--accent-text);font-weight:600}
 .titlebar .tt small{display:block;font-size:10px;font-weight:500;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;margin-top:2px}
-.titlebar .stat{margin-left:6px;padding-left:12px;border-left:1px solid var(--border);font-size:11px;color:var(--muted);font-family:var(--mono);white-space:nowrap}
-.titlebar .stat .ok{color:var(--pos-text)} .titlebar .stat .bad{color:var(--neg)}
+.lang-switch{position:fixed;right:16px;bottom:16px;z-index:60;font-family:inherit}
+  .lang-btn{display:flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface);color:var(--fg);border-radius:999px;padding:7px 13px;font-size:12px;font-weight:600;cursor:pointer;box-shadow:var(--shadow);transition:transform .12s,border-color .15s}
+  .lang-btn:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .lang-btn>svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+  .lang-btn .chev{width:11px;height:11px;opacity:.55;transition:transform .18s}
+  .lang-switch.open .lang-btn .chev{transform:rotate(180deg)}
+  .lang-menu{position:absolute;right:0;bottom:calc(100% + 8px);min-width:148px;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);padding:5px;opacity:0;visibility:hidden;transform:translateY(6px);transition:opacity .16s,transform .16s,visibility .16s}
+  .lang-switch.open .lang-menu{opacity:1;visibility:visible;transform:translateY(0)}
+  .lang-menu button{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;border:0;background:transparent;color:var(--fg);font-size:12.5px;font-weight:500;text-align:left;padding:8px 11px;border-radius:8px;cursor:pointer}
+  .lang-menu button:hover{background:var(--surface-2)}
+  .lang-menu button.on{color:var(--accent);font-weight:700}
+  .lang-menu button.on::after{content:'✓';font-size:11px}
+  .titlebar .hist{width:32px;height:32px;flex:0 0 auto;border-radius:9px;border:1px solid var(--border);background:transparent;display:grid;place-items:center;color:var(--muted);margin-left:4px}
+.titlebar .hist:hover{background:var(--surface-2);color:var(--fg)}
+.titlebar .hist svg{width:16px;height:16px}
 
-/* ---- left control panel ---- */
-.ctrl{position:fixed;top:70px;left:14px;z-index:25;width:300px;max-width:calc(100vw-28px);
-  max-height:calc(100vh-180px);display:flex;flex-direction:column;border-top:3px solid var(--accent)}
-.ctrl-head{display:flex;align-items:center;gap:9px;padding:11px 14px 9px;border-bottom:1px solid var(--border);flex:0 0 auto}
-.ctrl-head .ic{width:28px;height:28px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;color:var(--accent-strong);font-size:15px}
-.ctrl-head h2{font-size:14px;font-weight:700;letter-spacing:-.01em}
-.ctrl-head .c{font-size:11.5px;color:var(--muted)}
-.ctrl-head .cl{margin-left:auto;width:26px;height:26px;border-radius:8px;border:0;background:transparent;color:var(--muted-2)}
-.ctrl-head .cl:hover{background:var(--surface-2)}
-.ctrl-head .cl svg{width:15px;height:15px;transition:transform .2s}
-.ctrl.collapsed .cl svg{transform:rotate(180deg)}
-.ctrl-body{overflow-y:auto;padding:12px 14px 14px;display:grid;gap:12px;scrollbar-width:thin}
-.ctrl.collapsed .ctrl-body{display:none}
-.ctrl-body::-webkit-scrollbar{width:8px}.ctrl-body::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+/* ---- left audience panel (각진 좌측 레일) ---- */
+.audience{position:fixed;top:70px;left:14px;z-index:25;width:288px;max-width:calc(100vw - 28px);
+  max-height:calc(100vh - 180px);display:flex;flex-direction:column;border-top:3px solid var(--accent)}
+.aud-head{display:flex;align-items:center;gap:9px;padding:11px 14px 9px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.aud-head .ic{width:28px;height:28px;border-radius:8px;background:var(--accent-tint);display:grid;place-items:center;flex:0 0 auto}
+.aud-head .ic svg{width:15px;height:15px}
+.aud-head .ic svg{width:18px;height:18px;color:var(--accent-strong)}
+.aud-head h2{font-size:14.5px;font-weight:600;letter-spacing:-.01em}
+.aud-head .c{font-size:12px;color:var(--muted)}
+.aud-head .cl{margin-left:auto;width:28px;height:28px;border-radius:8px;border:0;background:transparent;display:grid;place-items:center;color:var(--muted-2);transition:.15s}
+.aud-head .cl:hover{background:var(--surface-2)}
+.aud-head .cl svg{width:15px;height:15px;transition:transform .2s}
+.audience.collapsed .cl svg{transform:rotate(180deg)}
+.aud-body{overflow-y:auto;padding:11px 14px 14px;display:grid;gap:11px;scrollbar-width:thin}
+.audience.collapsed{width:340px}
+.audience.collapsed .aud-body{display:none}
+.aud-body::-webkit-scrollbar{width:8px}.aud-body::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+
+.ds-pill{display:flex;align-items:center;gap:8px;background:var(--accent-tint);border:1px solid #d8d0fb;
+  border-radius:9px;padding:9px 12px;color:var(--accent-text);font-size:12.5px;font-weight:500}
+.ds-pill svg{width:15px;height:15px;flex:0 0 auto}
+.match{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:8px 12px;font-size:12.5px;color:var(--muted);text-align:center}
+.match b{color:var(--fg);font-family:var(--mono);font-weight:600}
+
+.fgrid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .field{display:grid;gap:6px}
 .field .row{display:flex;justify-content:space-between;align-items:baseline}
 .field .hint{font-size:10.5px;color:var(--muted-2);font-family:var(--mono)}
+.inp{width:100%;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-field);
+  padding:8px 11px;font-size:13.5px;color:var(--fg);transition:border-color .15s}
+.inp:focus{border-color:var(--accent)}
 
-.seg{display:flex;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-field);overflow:hidden}
-.seg button{flex:1;border:0;background:transparent;padding:8px 4px;font-size:12px;font-weight:600;color:var(--muted);transition:.12s}
-.seg button.on{background:var(--accent);color:#fff}
-.seg.mini button{padding:6px 4px;font-size:11.5px}
-
+/* ---- custom select (자체 디자인 드롭다운) ---- */
 .csel{position:relative}
 .csel .trg{width:100%;display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border-2);
-  border-radius:var(--r-field);padding:8px 11px;font-size:13.5px;color:var(--fg);text-align:left}
+  border-radius:var(--r-field);padding:8px 11px;font-size:13.5px;color:var(--fg);text-align:left;transition:border-color .15s,box-shadow .15s}
 .csel .trg .lab{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .csel .trg .cv{width:13px;height:13px;flex:0 0 auto;color:var(--muted);transition:transform .2s}
+.csel .trg:hover{border-color:var(--muted-2)}
 .csel.open .trg{border-color:var(--accent);box-shadow:0 0 0 3px rgba(124,92,255,.16)}
-.csel.open .trg .cv{transform:rotate(180deg)}
+.csel.open .trg .cv{transform:rotate(180deg);color:var(--accent-text)}
 .csel-menu{position:fixed;z-index:80;background:var(--surface);border:1px solid var(--border);border-radius:13px;
-  box-shadow:var(--shadow-lg);padding:6px;max-height:280px;overflow-y:auto;scrollbar-width:thin}
-.csel-menu .opt{width:100%;display:flex;align-items:center;gap:8px;padding:9px 11px;border:0;background:transparent;border-radius:9px;font-size:13.5px;color:var(--fg);text-align:left}
-.csel-menu .opt:hover{background:var(--surface-2)}
-.csel-menu .opt.sel{color:var(--accent-text);font-weight:600;background:var(--accent-tint)}
+  box-shadow:var(--shadow-lg);padding:6px;max-height:264px;overflow-y:auto;scrollbar-width:thin;
+  animation:cselin .14s cubic-bezier(.4,0,.2,1)}
+.csel-menu::-webkit-scrollbar{width:8px}.csel-menu::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
+@keyframes cselin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+.csel-menu .opt{width:100%;display:flex;align-items:center;gap:8px;padding:9px 11px;border:0;background:transparent;
+  border-radius:9px;font-size:13.5px;color:var(--fg);text-align:left;transition:.1s}
+.csel-menu .opt:hover,.csel-menu .opt.hl{background:var(--surface-2)}
 .csel-menu .opt span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
+.csel-menu .opt.sel{color:var(--accent-text);font-weight:600;background:var(--accent-tint)}
+.csel-menu .opt .ck{width:14px;height:14px;flex:0 0 auto;color:var(--accent-strong)}
 .range-wrap{display:flex;align-items:center;gap:10px}
 input[type=range]{-webkit-appearance:none;flex:1;height:4px;border-radius:99px;background:var(--surface-3);outline:none}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #fff;box-shadow:0 0 0 1px var(--border-2)}
-.numin{width:100%;background:var(--surface);border:1px solid var(--border-2);border-radius:var(--r-field);padding:8px 10px;font-size:13.5px;font-family:var(--mono)}
-.numin:focus{border-color:var(--accent);outline:none}
-.actions{display:flex;gap:8px}
-.btn{border-radius:var(--r-field);padding:10px;font-size:13px;font-weight:700;border:1px solid transparent;flex:1;transition:.14s}
-.btn.run{background:var(--accent);color:#fff}.btn.run:hover{background:var(--accent-strong)}
-.btn.run:disabled{background:var(--muted-2);cursor:not-allowed}
-.btn.ghost{flex:0 0 auto;background:var(--surface);border-color:var(--border-2);color:var(--fg);padding:10px 12px}
-.btn.ghost:hover{border-color:var(--accent);color:var(--accent-text)}
-.metricsel{display:flex;flex-wrap:wrap;gap:5px}
-.metricsel button{font-size:11.5px;padding:6px 9px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface);color:var(--muted)}
-.metricsel button.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-tint);font-weight:600}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:var(--accent);cursor:pointer;border:3px solid #fff}
+.range-val{font-family:var(--mono);font-size:13px;color:var(--accent-text);min-width:34px;text-align:right}
+.reset{width:100%;border:1px solid var(--border-2);background:var(--surface);border-radius:var(--r-field);
+  padding:9px;font-size:12.5px;font-weight:500;color:var(--fg);transition:.15s}
+.reset:hover{background:var(--surface-2);border-color:var(--muted-2)}
 
-/* ---- bottom dock ---- */
-.dock{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:25;width:min(560px,calc(100vw-360px));display:flex;flex-direction:column;gap:9px;align-items:center}
+/* ---- bottom dock: chips + input ---- */
+.dock{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:25;width:min(560px,calc(100vw - 360px));
+  display:flex;flex-direction:column;gap:9px;align-items:center}
 .chips{display:grid;grid-template-columns:1fr 1fr;gap:9px;width:100%}
-.chip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 13px;font-size:12.5px;color:var(--fg);box-shadow:var(--shadow);text-align:left;transition:.14s;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.chip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+  border-radius:9px;padding:10px 14px;font-size:13px;color:var(--fg);box-shadow:var(--shadow);text-align:left;transition:.14s;
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .chip:hover{border-color:var(--accent);color:var(--accent-text);transform:translateY(-1px)}
 .chip svg{width:14px;height:14px;color:var(--accent);flex:0 0 auto}
 .chip span{overflow:hidden;text-overflow:ellipsis}
-.askbar{display:flex;align-items:center;gap:8px;width:100%;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:6px 6px 6px 15px;box-shadow:var(--shadow-lg)}
+.askbar{display:flex;align-items:center;gap:8px;width:100%;background:var(--surface);border:1px solid var(--border);
+  border-radius:12px;padding:6px 6px 6px 15px;box-shadow:var(--shadow-lg)}
 .askbar input{flex:1;border:0;background:transparent;font-size:13.5px;color:var(--fg);outline:none;padding:6px 0}
-.send{width:36px;height:36px;flex:0 0 auto;border-radius:9px;border:0;background:var(--accent);display:grid;place-items:center;color:#fff}
-.send:hover{background:var(--accent-strong)} .send svg{width:19px;height:19px}
-.send.busy svg{display:none}.send .spin{display:none;width:18px;height:18px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite}
-.send.busy .spin{display:block}@keyframes sp{to{transform:rotate(360deg)}}
-.dock-cap{font-size:11px;color:var(--muted-2)} .dock-cap b{color:var(--muted);font-weight:600}
-.dock-cap.warn{color:var(--warn)}
+.askbar input::placeholder{color:var(--muted-2)}
+.send{width:36px;height:36px;flex:0 0 auto;border-radius:9px;border:0;background:var(--accent);display:grid;place-items:center;color:#fff;transition:.15s}
+.send:hover{background:var(--accent-strong)}
+.send:active{transform:scale(.94)}
+.send svg{width:19px;height:19px}
+.send.busy{pointer-events:none;opacity:.7}
+.send.busy svg{display:none}
+.send .spin{width:18px;height:18px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .7s linear infinite;display:none}
+.send.busy .spin{display:block}
+@keyframes sp{to{transform:rotate(360deg)}}
+.dock-cap{font-size:11px;color:var(--muted-2);letter-spacing:.01em}
+.dock-cap b{color:var(--muted);font-weight:500}
 
-/* ---- results panel ---- */
-.results{position:fixed;top:70px;right:16px;z-index:26;width:392px;max-width:calc(100vw-32px);max-height:calc(100vh-108px);
-  display:flex;flex-direction:column;border-top:3px solid var(--accent);
+/* ---- results panel (right) ---- */
+.results{position:fixed;top:78px;right:16px;z-index:26;width:392px;max-width:calc(100vw - 32px);
+  max-height:calc(100vh - 116px);display:flex;flex-direction:column;border-top:3px solid var(--accent);
   transform:translateX(calc(100% + 24px));opacity:0;transition:transform .32s cubic-bezier(.4,0,.2,1),opacity .25s;pointer-events:none}
 .results.on{transform:none;opacity:1;pointer-events:auto}
-.res-head{padding:15px 18px 12px;border-bottom:1px solid var(--border);flex:0 0 auto;position:relative}
-.res-head .q{font-size:14px;font-weight:700;line-height:1.45;padding-right:26px}
-.res-head .meta{margin-top:7px;display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
-.res-head .conf{font-family:var(--mono);font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px}
-.conf.high{color:var(--pos-text);background:var(--pos-tint)}.conf.medium{color:var(--warn);background:var(--warn-tint)}.conf.low{color:#c0353a;background:var(--neg-tint)}
-.res-head .x{position:absolute;top:13px;right:13px;width:28px;height:28px;border-radius:8px;border:0;background:transparent;color:var(--muted-2)}
+.res-head{padding:16px 18px 13px;border-bottom:1px solid var(--border);flex:0 0 auto}
+.res-head .q{font-size:14.5px;font-weight:600;line-height:1.45;letter-spacing:-.01em;text-wrap:pretty}
+.res-head .meta{margin-top:7px;display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--muted);flex-wrap:wrap}
+.res-head .x{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:8px;border:0;background:transparent;display:grid;place-items:center;color:var(--muted-2)}
 .res-head .x:hover{background:var(--surface-2)}
-.res-body{overflow-y:auto;padding:15px 18px 20px;display:grid;gap:16px;scrollbar-width:thin}
+.res-body{overflow-y:auto;padding:16px 18px 20px;display:grid;gap:18px;scrollbar-width:thin}
 .res-body::-webkit-scrollbar{width:8px}.res-body::-webkit-scrollbar-thumb{background:var(--surface-3);border-radius:99px}
-.res-sec h3{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
-.cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.mcard{background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px}
-.mcard .t{font-size:11px;color:var(--muted)}
-.mcard .v{font-family:var(--mono);font-size:16px;font-weight:700;margin-top:3px}
-.mcard .d{font-family:var(--mono);font-size:11px;margin-top:2px}
-.mcard .d.up{color:var(--pos-text)}.mcard .d.down{color:#c0353a}.mcard .d.flat{color:var(--muted-2)}
-.tone{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
-.tone button{font-size:11px;padding:5px 10px;border-radius:999px;border:1px solid var(--border-2);background:var(--surface);color:var(--muted)}
-.tone button.on{border-color:var(--accent);color:var(--accent-text);background:var(--accent-tint);font-weight:600}
-.rblock{border-left:2px solid var(--border-2);padding:2px 0 2px 12px;margin-bottom:11px;cursor:pointer;transition:.14s}
-.rblock:hover{border-color:var(--accent)}
-.rblock.summary{border-color:var(--accent)}.rblock.insight{border-color:var(--pos)}.rblock.warning{border-color:var(--warn)}.rblock.evidence{border-color:var(--muted-2)}
-.rblock .h{font-size:12px;font-weight:700;margin-bottom:3px}
-.rblock .x{font-size:12.5px;color:#34383d;line-height:1.6}
+.res-sec h3{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:11px}
+
+/* sentiment */
+.sentiment{display:flex;height:13px;border-radius:999px;overflow:hidden;margin-bottom:11px;background:var(--surface-3)}
+.sentiment i{display:block;height:100%}
+.sent-legend{display:flex;gap:14px;flex-wrap:wrap}
+.sent-legend .it{display:flex;align-items:center;gap:7px;font-size:12px}
+.sent-legend .sw{width:9px;height:9px;border-radius:3px}
+.sent-legend .v{font-family:var(--mono);font-weight:600;margin-left:1px}
+.sent-legend .k{color:var(--muted)}
+
+/* theme bars */
+.theme{margin-bottom:10px}
+.theme .tr{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px}
+.theme .tr .pc{font-family:var(--mono);color:var(--muted)}
+.theme .bar{height:7px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.theme .bar i{display:block;height:100%;border-radius:99px}
+
+/* quotes */
+.quote{border:1px solid var(--border);border-radius:14px;padding:13px 14px;margin-bottom:10px;background:var(--surface)}
+.quote .who{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.quote .av{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:11px;font-weight:700;color:#fff;flex:0 0 auto;font-family:var(--mono)}
+.quote .nm{font-size:12.5px;font-weight:600}
+.quote .tags{font-size:11px;color:var(--muted)}
+.quote .st{margin-left:auto;font-size:10.5px;font-weight:600;padding:2px 8px;border-radius:999px}
+.st.pro{color:var(--pro-text);background:var(--pro-tint)}
+.st.con{color:#c0353a;background:var(--con-tint)}
+.st.neu{color:#6b7178;background:var(--neu-tint)}
+.quote .tx{font-size:13.5px;line-height:1.6;color:#34383d;text-wrap:pretty}
+.quote .tx::before{content:'“';color:var(--muted-2)}.quote .tx::after{content:'”';color:var(--muted-2)}
+
+/* region split mini table */
 .rtbl{width:100%;border-collapse:collapse;font-size:12px}
-.rtbl td{padding:6px 4px;border-bottom:1px solid var(--border)}.rtbl tr:last-child td{border-bottom:0}
-.rtbl .rn{font-weight:600}.rtbl .pcell{text-align:right;font-family:var(--mono)}
-.rtbl .up{color:var(--pos-text)}.rtbl .down{color:#c0353a}
-.evi div{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:5px 0;border-bottom:1px solid var(--border);color:var(--muted)}
-.evi div:last-child{border:0}.evi b{color:var(--fg);text-align:right;font-weight:600}
+.rtbl td{padding:6px 4px;border-bottom:1px solid var(--border)}
+.rtbl tr:last-child td{border-bottom:0}
+.rtbl .rn{font-weight:500}
+.rtbl .mini{display:flex;height:7px;border-radius:99px;overflow:hidden;background:var(--surface-3);width:120px;margin-left:auto}
+.rtbl .mini i{height:100%}
+.rtbl .pcell{text-align:right;font-family:var(--mono);color:var(--muted);width:42px}
+
 .disc{font-size:11px;line-height:1.55;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px 13px}
 .disc b{color:var(--fg)}
 
-/* ---- map chrome ---- */
-.area-chip{position:fixed;z-index:28;pointer-events:none;transform:translate(-50%,-135%);background:#fff;border:1px solid var(--border-2);border-radius:11px;padding:7px 12px;font-size:13px;font-weight:600;box-shadow:var(--shadow-lg);white-space:nowrap;opacity:0;transition:opacity .1s}
-.area-chip.on{opacity:1}
-.area-chip .v{display:block;font-size:11px;font-weight:600;color:var(--accent-text);font-family:var(--mono);margin-top:2px}
-.level-pill{position:fixed;top:16px;right:16px;z-index:24;display:inline-flex;align-items:center;gap:6px;background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:5px 11px;font-size:11px;font-weight:600;box-shadow:var(--shadow)}
-.level-pill .dotp{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 2.5px var(--accent-tint)}
-.zoom-ctrl{position:fixed;right:14px;top:50%;transform:translateY(-50%);z-index:24;display:flex;flex-direction:column;gap:8px}
-.zc-seg{display:flex;flex-direction:column;gap:2px;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:3px;box-shadow:var(--shadow)}
-.zc-seg button{border:0;background:transparent;padding:7px 11px;border-radius:8px;font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap}
-.zc-seg button:hover{background:var(--surface-2)}.zc-seg button.on{background:var(--accent);color:#fff}
-.zc-seg button:disabled{color:var(--muted-2);opacity:.5;cursor:not-allowed}
-.zc-pm{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:11px;box-shadow:var(--shadow);overflow:hidden}
-.zc-pm button{width:34px;height:34px;border:0;background:transparent;font-size:17px;color:var(--fg);display:grid;place-items:center}
-.zc-pm button:first-child{border-bottom:1px solid var(--border)}.zc-pm button:hover{background:var(--surface-2)}
-.legend{position:fixed;left:14px;bottom:20px;z-index:24;padding:10px 13px;min-width:180px}
-.legend .lbl{display:block;margin-bottom:8px}
-.legbar{height:10px;border-radius:6px;margin-bottom:5px}
-.legval{display:flex;justify-content:space-between;font-family:var(--mono);font-size:10px;color:var(--muted)}
-.toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,12px);z-index:60;opacity:0;background:var(--fg);color:#fff;border-radius:10px;padding:9px 15px;font-size:12.5px;transition:.2s;pointer-events:none;box-shadow:var(--shadow-lg)}
+/* empty hint inside results before content (not used normally) */
+.toast{position:fixed;left:50%;bottom:96px;transform:translate(-50%,12px);z-index:60;opacity:0;background:var(--fg);color:#fff;
+  border-radius:10px;padding:9px 15px;font-size:12.5px;transition:.2s;pointer-events:none;box-shadow:var(--shadow-lg)}
 .toast.on{opacity:1;transform:translate(-50%,0)}
-.maplibregl-popup{display:none}
 
-@media (max-width:900px){
-  .ctrl{top:70px;left:12px;right:12px;width:auto;max-height:44vh}
-  .results{top:auto;bottom:0;left:0;right:0;width:auto;max-width:none;max-height:62vh;border-radius:18px 18px 0 0;transform:translateY(calc(100% + 24px))}
+/* history dropdown */
+.histmenu{position:fixed;top:64px;left:50%;transform:translateX(-50%) translateY(-6px);z-index:40;width:min(380px,calc(100vw - 32px));
+  padding:7px;opacity:0;pointer-events:none;transition:.18s}
+.histmenu.on{opacity:1;pointer-events:auto;transform:translateX(-50%)}
+.histmenu .hi{display:flex;align-items:center;gap:9px;padding:10px 12px;border-radius:11px;font-size:13px;color:var(--fg);width:100%;border:0;background:transparent;text-align:left}
+.histmenu .hi:hover{background:var(--surface-2)}
+.histmenu .hi svg{width:13px;height:13px;color:var(--muted-2);flex:0 0 auto}
+.histmenu .hi span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.histmenu .empty{padding:14px;text-align:center;color:var(--muted-2);font-size:12.5px}
+
+/* ---- responsive ---- */
+@media (max-width:1100px){
+  .dock{width:min(620px,calc(100vw - 36px))}
+}
+@media (max-width:840px){
+  .audience{top:74px;left:12px;right:12px;width:auto;max-height:46vh}
+  .results{top:auto;bottom:0;right:0;left:0;width:auto;max-width:none;max-height:64vh;border-radius:20px 20px 0 0;
+    transform:translateY(calc(100% + 24px))}
   .results.on{transform:none}
-  .dock{width:calc(100vw-24px)}.chips{grid-template-columns:1fr}.chip:nth-child(n+3){display:none}
-  .legend{display:none}
+  .dock{bottom:14px;width:calc(100vw - 24px)}
+  .chips{grid-template-columns:1fr}
+  .chip:nth-child(n+4){display:none}
 }
 </style>
 </head>
 <body>
+
 <div id="map"></div>
-<div class="map-fallback" id="mapFallback"><span>지도 로딩 중…</span></div>
+<div class="map-fallback" id="mapFallback"><span>대한민국 지도 로딩 중…</span></div>
 
+<!-- top title -->
 <div class="titlebar">
-  <div class="mk">D</div>
-  <div class="tt">Data-<b>If</b> Korea<small>지방소멸 시뮬레이터</small></div>
-  <div class="stat" id="hstat">서버 확인 중…</div>
+  <div class="mk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8 4-16 3 8h4"/></svg></div>
+  <div class="tt">만약 <b>대한민국</b>이라면<small data-i18n="sub">페르소나 의견 탐색</small></div>
+  <button class="hist" id="histBtn" title="히스토리" aria-label="히스토리">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/><path d="M12 7v5l3 2"/></svg>
+  </button>
 </div>
+<div class="glass histmenu" id="histMenu"><div class="empty" id="histEmpty">아직 질문 기록이 없습니다</div></div>
 
-<!-- left control panel -->
-<aside class="glass ctrl" id="ctrl">
-  <div class="ctrl-head">
-    <div class="ic">◧</div>
-    <div><h2>시나리오 파라미터</h2><div class="c" id="ctrlSub">청년 인구 이동 · 시·도</div></div>
-    <button class="cl" id="ctrlToggle" aria-label="접기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg></button>
+<!-- left audience panel -->
+<aside class="glass audience" id="audience" data-od-id="audience">
+  <div class="aud-head">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13A4 4 0 0119 7a4 4 0 01-3 3.87"/></svg></div>
+    <div>
+      <h2 data-i18n="aud">응답자 표본</h2>
+      <div class="c"><span class="num" id="poolTotal">51,300</span>명 페르소나</div>
+    </div>
+    <button class="cl" id="audToggle" aria-label="접기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 15l-6-6-6 6"/></svg></button>
   </div>
-  <div class="ctrl-body">
-    <div class="field"><span class="lbl">시나리오 유형</span>
-      <div class="seg" id="opseg"><button data-op="move" class="on">이동</button><button data-op="increase">증가</button><button data-op="decrease">감소</button></div>
+  <div class="aud-body">
+    <div class="ds-pill">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v6c0 1.66 4 3 9 3s9-1.34 9-3V5"/><path d="M3 11v6c0 1.66 4 3 9 3s9-1.34 9-3v-6"/></svg>
+      KR 합성 페르소나 v1 · <span class="num">51,300</span>명
     </div>
-    <div class="field" id="fromField"><span class="lbl" id="fromLbl">출발 지역</span><div class="csel" id="fromSel"></div></div>
-    <div class="field" id="toField"><span class="lbl">도착 지역</span><div class="csel" id="toSel"></div></div>
-    <div class="field"><span class="lbl">연령대</span>
-      <div class="seg mini" id="ageseg"><button data-age="0-19">유소년</button><button data-age="20-34" class="on">청년</button><button data-age="35-64">중장년</button><button data-age="65+">고령</button></div>
+    <div class="match">현재 필터에 <b id="matchCount">51,300</b>명 일치</div>
+
+    <div class="fgrid2">
+      <div class="field"><span class="lbl" data-i18n="minAge">최소 연령</span><input class="inp num" id="minAge" type="number" min="18" max="90" value="18"></div>
+      <div class="field"><span class="lbl" data-i18n="maxAge">최대 연령</span><input class="inp num" id="maxAge" type="number" min="18" max="90" value="85"></div>
     </div>
+
     <div class="field">
-      <div class="row"><span class="lbl">변화 규모</span><span class="hint" id="unitHint">명</span></div>
-      <div class="range-wrap"><input type="range" id="valRange" min="0" max="200000" step="5000" value="50000"><input class="numin" id="valNum" style="width:96px" value="50000"></div>
-      <div class="seg mini" id="unitseg" style="margin-top:2px"><button data-u="people" class="on">명</button><button data-u="percent">%</button></div>
+      <div class="row"><span class="lbl" data-i18n="sample">표본 크기</span><span class="hint">최대 500</span></div>
+      <div class="range-wrap"><input type="range" id="sampleSize" min="20" max="500" step="10" value="60"><span class="range-val num" id="sampleVal">60</span></div>
     </div>
-    <div class="actions">
-      <button class="btn run" id="runBtn">시뮬레이션 실행</button>
-      <button class="btn ghost" id="resetBtn">초기화</button>
-    </div>
-    <div class="field"><span class="lbl">지도 지표</span>
-      <div class="metricsel" id="metricSel"></div>
-      <div class="seg mini" id="modeTog" style="margin-top:6px"><button data-m="base" class="on">기준값</button><button data-m="delta">변화량</button></div>
-    </div>
+
+    <div class="field"><span class="lbl" data-i18n="sex">성별</span><div class="csel" id="sex"></div></div>
+    <div class="field"><span class="lbl" data-i18n="job">직업군</span><div class="csel" id="job"></div></div>
+    <div class="field"><span class="lbl" data-i18n="ind">산업</span><div class="csel" id="ind"></div></div>
+    <div class="field"><span class="lbl" data-i18n="edu">학력</span><div class="csel" id="edu"></div></div>
+    <div class="field"><span class="lbl" data-i18n="region">지역</span><div class="csel" id="region"></div></div>
+
+    <button class="reset" id="resetBtn" data-i18n="reset">필터 초기화</button>
   </div>
 </aside>
 
@@ -234,14 +364,17 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 <div class="dock" id="dock">
   <div class="chips" id="chips"></div>
   <div class="askbar">
-    <input id="ask" placeholder="예: 서울 청년 5만 명이 세종으로 이동하면?" autocomplete="off">
-    <button class="send" id="sendBtn" aria-label="실행"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg><span class="spin"></span></button>
+    <input id="ask" data-i18n-ph="ask" placeholder="만약 대한민국이라면…  (인구 감소에 대해 물어보세요)" autocomplete="off">
+    <button class="send" id="sendBtn" aria-label="질문 보내기">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg>
+      <span class="spin"></span>
+    </button>
   </div>
-  <div class="dock-cap" id="dockCap">결정론적 엔진 계산 · LLM은 숫자를 만들지 않습니다</div>
+  <div class="dock-cap"><b class="num">51,300</b>명 합성 페르소나 · 주제: 인구 감소 · 가정 기반 의견 시뮬레이션</div>
 </div>
 
 <!-- results -->
-<aside class="glass results" id="results">
+<aside class="glass results" id="results" data-od-id="results">
   <div class="res-head">
     <button class="x" id="resClose" aria-label="닫기"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
     <div class="q" id="resQ">—</div>
@@ -252,304 +385,695 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:16px;heigh
 
 <div class="area-chip" id="areaChip"></div>
 <div class="level-pill" id="levelPill"><span class="dotp"></span>시·도 단위</div>
-<div class="zoom-ctrl">
-  <div class="zc-seg" id="zcSeg">
-    <button data-lv="sido" class="on">시·도</button>
-    <button data-lv="sgg" id="sggBtn">시·군·구</button>
-  </div>
-  <div class="zc-pm"><button id="zcIn">+</button><button id="zcOut">−</button></div>
+<div class="glass sel-panel" id="selPanel" style="display:none" data-od-id="sel-panel">
+  <div class="sp-head"><span data-i18n="selTitle">선택한 지역</span><span class="sp-n" id="selCount">0</span><button class="sp-clear" id="selClear" data-i18n="clearAll">전체 해제</button></div>
+  <div class="sp-list" id="selList"></div>
 </div>
-<div class="glass legend" id="legend">
-  <span class="lbl" id="legTitle">청년 비율</span>
-  <div class="legbar" id="legBar"></div>
-  <div class="legval"><span id="legMin">–</span><span id="legMax">–</span></div>
+<div class="zoom-ctrl" id="zoomCtrl">
+  <div class="zc-seg" id="zcSeg">
+    <button type="button" data-lv="sido" class="on" data-i18n="lvSido">시·도</button>
+    <button type="button" data-lv="sgg" data-i18n="lvSgg">시·군·구</button>
+    <button type="button" data-lv="emd" data-i18n="lvEmd">읍·면·동</button>
+  </div>
+  <div class="zc-pm">
+    <button type="button" id="zcIn" aria-label="확대">+</button>
+    <button type="button" id="zcOut" aria-label="축소">−</button>
+  </div>
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="./assets/vendor/maplibre-gl.js"></script>
-<script src="./assets/app-engine.js"></script>
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<div class="lang-switch" id="langSwitch">
+  <button class="lang-btn" id="langBtn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Language">
+    <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3c2.6 2.8 2.6 15.2 0 18M12 3c-2.6 2.8-2.6 15.2 0 18"/></svg>
+    <span id="langCur">한국어</span>
+    <svg class="chev" viewBox="0 0 24 24" stroke="currentColor" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
+  <div class="lang-menu" id="langMenu" role="menu">
+    <button type="button" role="menuitem" data-l="ko">한국어</button>
+    <button type="button" role="menuitem" data-l="ja">日本語</button>
+    <button type="button" role="menuitem" data-l="en">English</button>
+  </div>
+</div>
 <script>
+/* =====================================================================
+   만약 대한민국이라면 — 합성 페르소나 의견 시뮬레이터
+   * 의견 수치는 LLM이 아니라 아래 결정론적 모델이 산출 (가정 기반).
+   * 페르소나는 합성(목업) 데이터. 실제 개인/실측 여론조사가 아님.
+   ===================================================================== */
 const $=id=>document.getElementById(id);
 
-/* ---- metric metadata ---- */
-const METRICS={
-  youthRatio:{label:'청년 비율',kind:'ratio'}, agingRatio:{label:'고령화율',kind:'ratio'},
-  dependencyRatio:{label:'부양비',kind:'ratio2'}, density:{label:'인구밀도',kind:'dens'},
-  riskIndex:{label:'소멸위험',kind:'ratio2'}, total:{label:'총인구',kind:'int'},
-};
-function fmt(k,v){ if(v==null||isNaN(v))return '–';
-  if(k==='ratio')return (v*100).toFixed(1)+'%'; if(k==='ratio2')return v.toFixed(2);
-  if(k==='dens')return Math.round(v).toLocaleString('ko')+'/㎢'; return Math.round(v).toLocaleString('ko'); }
-function fmtD(k,v){ if(v==null||isNaN(v))return '–'; const s=v>0?'+':'';
-  if(k==='ratio')return s+(v*100).toFixed(2)+'%p'; if(k==='ratio2')return s+v.toFixed(3);
-  if(k==='dens')return s+Math.round(v).toLocaleString('ko')+'/㎢'; return s+Math.round(v).toLocaleString('ko'); }
+/* ---- 17 시도: 코드, 이름, 중심 좌표, 인구 가중치(표본 분포용) ---- */
+const SIDO=[
+ {c:'11',n:'서울',lat:37.566,lng:126.978,w:.182,metro:1},
+ {c:'41',n:'경기',lat:37.41, lng:127.52, w:.262,metro:1},
+ {c:'28',n:'인천',lat:37.456,lng:126.705,w:.058,metro:1},
+ {c:'30',n:'대전',lat:36.35, lng:127.385,w:.028,metro:.6},
+ {c:'27',n:'대구',lat:35.87, lng:128.60, w:.046,metro:.6},
+ {c:'26',n:'부산',lat:35.18, lng:129.075,w:.063,metro:.6},
+ {c:'29',n:'광주',lat:35.16, lng:126.85, w:.027,metro:.6},
+ {c:'31',n:'울산',lat:35.54, lng:129.31, w:.021,metro:.5},
+ {c:'36',n:'세종',lat:36.56, lng:127.29, w:.0075,metro:.7},
+ {c:'42',n:'강원',lat:37.86, lng:128.31, w:.029,metro:0},
+ {c:'43',n:'충북',lat:36.80, lng:127.70, w:.031,metro:.2},
+ {c:'44',n:'충남',lat:36.60, lng:126.80, w:.041,metro:.2},
+ {c:'45',n:'전북',lat:35.70, lng:127.10, w:.034,metro:0},
+ {c:'46',n:'전남',lat:34.80, lng:126.90, w:.035,metro:0},
+ {c:'47',n:'경북',lat:36.40, lng:128.90, w:.049,metro:.1},
+ {c:'48',n:'경남',lat:35.40, lng:128.20, w:.063,metro:.2},
+ {c:'50',n:'제주',lat:33.43, lng:126.56, w:.013,metro:.1},
+];
+const byCode={}; SIDO.forEach(s=>byCode[s.c]=s);
+const JOBS=['학생','직장인','자영업','전문직','공무원','주부','은퇴','프리랜서'];
+const INDS=['제조','IT·서비스','유통·서비스','교육','의료·복지','금융','공공','농림어업'];
+const EDUS=['고졸 이하','대재·대졸','대학원'];
+let POOL_TOTAL=51300;
+let AGEDIST=null; /* 실측 성인 연령대 분포(a=20-34,b=35-64 누적기준) — 실데이터 로드 시 설정 */
 
-/* ---- state ---- */
-let HEALTH=null, LEVEL='sido', REG={}, GEO={}, SIM=null, map=null, mapReady=false;
-let curMetric='youthRatio', curMode='base', curTone='general';
-let op={type:'move', from:'11', to:'29', age:'20-34', value:50000, unit:'people'};
-const short=n=>n.replace(/(특별자치시|특별자치도|특별시|광역시|자치시|자치도|시|도)$/,'')||n;
+/* deterministic hash → [0,1) */
+function h01(n){n=(n^61)^(n>>>16);n=(n+(n<<3))>>>0;n^=n>>>4;n=Math.imul(n,0x27d4eb2d);n^=n>>>15;return ((n>>>0)%100000)/100000;}
+function pick(arr,r){return arr[Math.floor(r*arr.length)%arr.length];}
 
-/* ---- color ---- */
-function hx(h){return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];}
-function mix(a,b,t){const A=hx(a),B=hx(b);return `rgb(${Math.round(A[0]+(B[0]-A[0])*t)},${Math.round(A[1]+(B[1]-A[1])*t)},${Math.round(A[2]+(B[2]-A[2])*t)})`;}
-function seq(t){t=Math.max(0,Math.min(1,t));return t<.5?mix('#f0edff','#a48bff',t*2):mix('#a48bff','#5b44d6',(t-.5)*2);}
-function dv(t){return t>=0?mix('#eef0f3','#10b981',Math.min(1,t)):mix('#eef0f3','#e5484d',Math.min(1,-t));}
-
-function curReg(){return REG[LEVEL];}
-function hasData(){return curReg() && curReg().hasData;}
-function valueFor(code){
-  if(curMode==='delta'){ if(!SIM||!SIM.areas[code])return null; return SIM.areas[code].delta[curMetric]; }
-  const a=curReg().areas[code]; return a&&a.metrics?a.metrics[curMetric]:null;
-}
-
-/* ---- map ---- */
-function initMap(){
-  if(!window.maplibregl)return false;
-  map=new maplibregl.Map({container:'map',attributionControl:false,
-    style:{version:8,sources:{carto:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],tileSize:256,attribution:'© OpenStreetMap · © CARTO'}},
-      layers:[{id:'bg',type:'background',paint:{'background-color':'#dbe4ef'}},{id:'carto',type:'raster',source:'carto'}]},
-    center:[127.7,36.2],zoom:6.1,minZoom:5,maxZoom:11,maxBounds:[[122,32],[132.5,39.6]],dragRotate:false,renderWorldCopies:false});
-  map.addControl(new maplibregl.AttributionControl({compact:true}));
-  map.on('load',()=>{
-    $('mapFallback').style.display='none';
-    map.addSource('admin',{type:'geojson',data:GEO[LEVEL],generateId:true});
-    map.addLayer({id:'fill',type:'fill',source:'admin',paint:{'fill-color':['coalesce',['get','color'],'#c7cede'],'fill-opacity':0.72}});
-    map.addLayer({id:'line',type:'line',source:'admin',paint:{'line-color':'rgba(91,68,214,.45)','line-width':0.7}});
-    map.addLayer({id:'hl',type:'line',source:'admin',filter:['==','code',''],paint:{'line-color':'#5b44d6','line-width':2.6}});
-    mapReady=true; wireMap(); repaint();
-  });
-  return true;
-}
-function repaint(){
-  if(!mapReady||!GEO[LEVEL])return;
-  const g=GEO[LEVEL], kind=METRICS[curMetric].kind;
-  const vals=g.features.map(f=>valueFor(f.properties.code)).filter(v=>v!=null&&!isNaN(v));
-  const lo=vals.length?Math.min(...vals):0, hi=vals.length?Math.max(...vals):1;
-  const maxAbs=Math.max(Math.abs(lo),Math.abs(hi))||1;
-  g.features.forEach(f=>{
-    const v=valueFor(f.properties.code); let color='#c7cede';
-    if(v!=null&&!isNaN(v)) color=curMode==='delta'?dv(v/maxAbs):seq(hi>lo?(v-lo)/(hi-lo):.5);
-    f.properties.color=color;
-  });
-  if(map.getSource('admin'))map.getSource('admin').setData(g);
-  $('legTitle').textContent=METRICS[curMetric].label+(curMode==='delta'?' · 변화량':'');
-  if(!vals.length){ $('legBar').style.background='var(--surface-3)'; $('legMin').textContent='데이터 준비중'; $('legMax').textContent=''; return; }
-  if(curMode==='delta'){ $('legBar').style.background=`linear-gradient(90deg,${dv(-1)},${dv(0)},${dv(1)})`; $('legMin').textContent=fmtD(kind,-maxAbs); $('legMax').textContent=fmtD(kind,maxAbs); }
-  else { $('legBar').style.background=`linear-gradient(90deg,${seq(0)},${seq(.5)},${seq(1)})`; $('legMin').textContent=fmt(kind,lo); $('legMax').textContent=fmt(kind,hi); }
-}
-function wireMap(){
-  const chip=$('areaChip');
-  map.on('mousemove','fill',e=>{
-    const f=e.features[0]; if(!f)return; map.getCanvas().style.cursor='pointer';
-    const code=f.properties.code; map.setFilter('hl',['==','code',code]);
-    const a=curReg().areas[code]; const kind=METRICS[curMetric].kind; const v=valueFor(code);
-    chip.innerHTML=`${short(a?a.name:f.properties.name)}<span class="v">${curMode==='delta'?fmtD(kind,v):fmt(kind,v)}</span>`;
-    chip.style.left=e.originalEvent.clientX+'px'; chip.style.top=e.originalEvent.clientY+'px'; chip.classList.add('on');
-  });
-  map.on('mouseleave','fill',()=>{map.getCanvas().style.cursor='';map.setFilter('hl',['==','code','']);chip.classList.remove('on');});
-  map.on('click','fill',e=>{
-    const code=e.features[0].properties.code; if(!hasData())return;
-    if(op.type==='move'){ if(code===op.from)return; op.to=code; } else { op.from=code; }
-    syncControls(); toast(`${short(curReg().areas[code].name)} 선택`);
-  });
-}
-async function switchLevel(lv){
-  if(lv===LEVEL)return;
-  LEVEL=lv; SIM=null; curMode='base';
-  document.querySelectorAll('#zcSeg button').forEach(b=>b.classList.toggle('on',b.dataset.lv===lv));
-  document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));
-  $('levelPill').innerHTML=`<span class="dotp"></span>${lv==='sido'?'시·도':'시·군·구'} 단위`;
-  $('ctrlSub').textContent='청년 인구 이동 · '+(lv==='sido'?'시·도':'시·군·구');
-  await loadLevel(lv);
-  if(map.getSource('admin'))map.getSource('admin').setData(GEO[lv]);
-  buildRegionSelects(); syncControls(); repaint();
-  map.easeTo({zoom:lv==='sgg'?7.4:6.1,duration:600});
-  if(!hasData()){ $('runBtn').disabled=true; $('dockCap').className='dock-cap warn'; $('dockCap').textContent='시·군·구 인구 데이터 준비 중 — 경계·이름만 표시(시뮬레이션은 시·도에서)'; }
-  else { $('runBtn').disabled=false; $('dockCap').className='dock-cap'; $('dockCap').textContent='결정론적 엔진 계산 · LLM은 숫자를 만들지 않습니다'; }
-}
-async function loadLevel(lv){
-  if(REG[lv]&&GEO[lv])return;
-  const geoP=fetch(`./data/${lv}.geojson`).then(r=>r.json());
-  const popFile=lv==='sido'?'population.json':'population_sgg.json';
-  let reg;
-  try{
-    const p=await fetch(`./data/${popFile}`); if(!p.ok)throw 0;
-    const pop=await p.json();
-    const areas={};
-    for(const c in pop.areas){const a=pop.areas[c];
-      areas[c]={code:c,name:a.name,total:a.total,bands:a.bands,area_km2:a.area_km2,sido:a.sido||c.slice(0,2),metrics:DataIfEngine.metrics(a)};}
-    reg={level:lv,hasData:true,baseYear:pop.baseYear,basePeriod:pop.basePeriod,source:pop.source,ageBands:pop.ageBands,areas};
-  }catch(e){
-    // 인구 데이터 없음(예: 시군구 미탑재) → 경계·이름만
-    const g=await geoP; const areas={};
-    g.features.forEach(f=>{const p=f.properties;areas[p.code]={code:p.code,name:p.name,sido:p.sido||p.code.slice(0,2),total:null,metrics:null};});
-    REG[lv]={level:lv,hasData:false,source:'경계: southkorea-maps(통계청 2018) · 인구 데이터 준비 중',areas};
-    GEO[lv]=g; return;
+/* ---- 합성 페르소나 풀 (대표 표본 600, 화면 수치는 풀 전체로 스케일)
+   region 가중치(SIDO.w)·연령분포(AGEDIST)는 실데이터 로드 시 실측 인구로 대체 ---- */
+function genPersonas(){
+  const out=[]; const N=600;
+  const cum=[]; let acc=0; SIDO.forEach(s=>{acc+=s.w;cum.push(acc);}); const tot=acc;
+  for(let i=0;i<N;i++){
+    const rr=h01(i*7+3)*tot; let si=cum.findIndex(x=>rr<=x); if(si<0)si=SIDO.length-1;
+    const s=SIDO[si];
+    const ar=h01(i*13+5);
+    let age;
+    if(AGEDIST){ // 실측 성인 연령대 분포 반영 (0-19 제외한 성인 여론풀)
+      if(ar<AGEDIST.a)age=20+Math.floor(h01(i*3+1)*15);
+      else if(ar<AGEDIST.a+AGEDIST.b)age=35+Math.floor(h01(i*3+2)*30);
+      else age=65+Math.floor(h01(i*3+11)*25);
+    } else {
+      if(ar<.16)age=18+Math.floor(h01(i*3+1)*17); else if(ar<.42)age=35+Math.floor(h01(i*3+2)*15);
+      else if(ar<.68)age=50+Math.floor(h01(i*3+9)*15); else age=65+Math.floor(h01(i*3+11)*22);
+    }
+    const sex=h01(i*17+2)<.5?'m':'f';
+    const job=age<25?(h01(i*5)<.7?'학생':'프리랜서'):age>=63?(h01(i*5)<.62?'은퇴':pick(['자영업','주부','직장인'],h01(i*23))):pick(JOBS.slice(1,6).concat(['프리랜서','자영업']),h01(i*29+4));
+    const ind=pick(INDS,h01(i*31+6));
+    const edu=h01(i*37+8); const eduV=edu<.28?'고졸 이하':edu<.86?'대재·대졸':'대학원';
+    out.push({id:i,r:s.c,region:s.n,metro:s.metro,age,sex,job,ind,edu:eduV});
   }
-  GEO[lv]=await geoP; REG[lv]=reg;
+  return out;
+}
+let PERSONAS=genPersonas();
+
+/* ---- 실측 시도 인구 반영 (행안부 주민등록 2026-05) — JS만, DOM/CSS 무손 ---- */
+async function loadRealPop(){
+  const M={'서울':'11','경기':'31','인천':'23','대전':'25','대구':'22','부산':'21','광주':'24','울산':'26','세종':'29','강원':'32','충북':'33','충남':'34','전북':'35','전남':'36','경북':'37','경남':'38','제주':'39'};
+  try{
+    const pop=await fetch('./data/population.json').then(r=>{if(!r.ok)throw 0;return r.json();});
+    let natl=0; SIDO.forEach(s=>{const a=pop.areas[M[s.n]]; if(a){s.w=a.total; natl+=a.total;}});
+    if(!natl)throw 0;
+    SIDO.forEach(s=>{s.w=s.w/natl;});                 // 실측 인구 점유율
+    let y=0,m=0,o=0; for(const c in pop.areas){const b=pop.areas[c].bands; y+=b['20-34']; m+=b['35-64']; o+=b['65+'];}
+    const adult=y+m+o; AGEDIST={a:y/adult,b:m/adult};  // 성인 연령대 분포
+    POOL_TOTAL=natl; PERSONAS=genPersonas();
+    const kn=(POOL_TOTAL).toLocaleString('ko-KR');
+    $('poolTotal').textContent=kn;
+    const ds=document.querySelector('.ds-pill'); if(ds)ds.innerHTML=ds.innerHTML.replace(/51,300/g,kn);
+    const dc=document.querySelector('.dock-cap'); if(dc)dc.innerHTML=dc.innerHTML.replace(/51,300/g,kn);
+    updateMatch();
+    if(typeof toast==='function')toast('실측 인구('+(pop.basePeriod||pop.baseYear)+') 반영됨');
+  }catch(e){ /* 실패 시 합성 기본값 유지 */ }
 }
 
-/* ---- custom select ---- */
+/* ---- filters ---- */
+const F={minAge:18,maxAge:85,sex:'all',job:'all',ind:'all',edu:'all',region:'all'};
+function matches(p){
+  return p.age>=F.minAge && p.age<=F.maxAge
+    && (F.sex==='all'|| (F.sex==='m'?p.sex==='m':p.sex==='f'))
+    && (F.job==='all'||p.job===F.job)
+    && (F.ind==='all'||p.ind===F.ind)
+    && (F.edu==='all'||p.edu===F.edu)
+    && (F.region==='all'||p.r===F.region);
+}
+function filtered(){return PERSONAS.filter(matches);}
+function updateMatch(){
+  const f=filtered(); const ratio=f.length/PERSONAS.length;
+  const est=Math.round(POOL_TOTAL*ratio);
+  $('matchCount').textContent=est.toLocaleString('ko-KR');
+  return f;
+}
+
+/* ============ 질문(인구 감소 주제) ============
+   각 질문: 기본 성향 bias, 연령·수도권·성별 가중, 찬/반 테마, 인용 템플릿 */
+const Q_KO=[
+ {id:'q_settle', t:'지방 소멸을 막기 위해 청년 정착 지원금을 줘야 할까요?',
+   bias:.18, age:-.004, metro:-.34, sex:0,
+   pro:['지방 인구 유출을 늦추는 직접적 수단','청년 주거·창업 부담 완화','균형발전의 마중물'],
+   con:['재정 부담과 지속가능성 의문','지원금만으로 정착 유인 부족','일자리 없으면 효과 제한적'],
+   qpro:['지원금이 있으면 고향에 남는 걸 진지하게 고민할 것 같아요.','청년이 떠나면 동네 상권부터 무너집니다. 직접 지원이 맞아요.'],
+   qcon:['돈만 주면 뭐하나요. 일자리가 없으면 결국 다시 떠납니다.','세금으로 매년 감당할 수 있을지 의문이에요.'],
+   qneu:['취지는 공감하지만 일자리·정주 여건이 같이 가야 한다고 봐요.']},
+ {id:'q_relocate', t:'수도권 집중 완화를 위해 공공기관을 더 지방으로 이전해야 할까요?',
+   bias:.08, age:.001, metro:-.5, sex:0,
+   pro:['수도권 과밀·집값 완화','지역 양질의 일자리 창출','국토 균형발전'],
+   con:['가족 분리·정주 여건 미비','업무 효율·접근성 저하','이전만으로 자생 기반 약함'],
+   qpro:['좋은 일자리가 지역에 생기면 청년이 남을 이유가 생깁니다.','수도권 집값을 잡으려면 분산이 답이에요.'],
+   qcon:['혁신도시 가봤더니 주말엔 텅 비어요. 가족은 서울에 남고요.','이전 비용 대비 효과가 정말 있는지 따져봐야 합니다.'],
+   qneu:['이전은 시작일 뿐, 정주 여건이 핵심이라고 생각해요.']},
+ {id:'q_leave', t:'저출생 대응으로 육아휴직을 의무화해야 할까요?',
+   bias:.22, age:-.012, metro:.06, sex:.18,
+   pro:['양육 부담을 사회가 분담','남성 육아 참여 확대','경력 단절 완화'],
+   con:['중소기업 부담·대체인력 문제','강제보다 인센티브가 효과적','현장 운영 경직성'],
+   qpro:['눈치 안 보고 쓸 수 있게 의무화가 필요해요. 특히 아빠들이요.','제도가 있어도 못 쓰면 소용없죠. 강제력이 있어야 합니다.'],
+   qcon:['직원 5명인 회사에서 의무화하면 누가 일을 메우나요.','의무보다 대체인력 지원이 먼저라고 봐요.'],
+   qneu:['방향은 맞지만 기업 규모별로 다르게 가야 할 것 같아요.']},
+ {id:'q_retire', t:'정년을 65세로 연장하는 것에 찬성하시나요?',
+   bias:-.02, age:.018, metro:0, sex:-.04,
+   pro:['노후 소득 공백 해소','숙련 인력 활용','연금 수급 연령과 정합'],
+   con:['청년 채용 위축 우려','임금체계 개편 선행 필요','기업 인건비 부담'],
+   qpro:['국민연금은 65세부터인데 정년은 60세, 5년 공백을 어떻게 버티나요.','아직 일할 수 있는데 나가라는 건 사회적 손실이에요.'],
+   qcon:['윗자리가 안 비면 저희 같은 청년은 어디로 가나요.','임금피크제 같은 개편 없이 연장만 하면 부담만 커져요.'],
+   qneu:['연장은 필요하지만 임금체계 개편이 같이 가야 합니다.']},
+ {id:'q_immig', t:'인구 감소 대응으로 이민을 더 적극적으로 받아들여야 할까요?',
+   bias:-.06, age:-.006, metro:.12, sex:0,
+   pro:['생산연령인구 감소 보완','지방·중소기업 인력난 완화','사회 다양성 확대'],
+   con:['사회 통합·치안 우려','선주민 일자리 경합 우려','정착 인프라 부족'],
+   qpro:['공장이고 농촌이고 사람이 없어요. 이민 없이는 못 버팁니다.','이미 외국인 없이는 안 돌아가는 현장이 많아요.'],
+   qcon:['통합 정책 없이 숫자만 늘리면 갈등이 생길까 걱정돼요.','먼저 청년·여성·고령 고용부터 늘려야 한다고 봐요.'],
+   qneu:['필요하지만 정착·교육 인프라가 같이 준비돼야 해요.']},
+ {id:'q_4day', t:'주 4일제가 출산율 회복에 도움이 될까요?',
+   bias:.05, age:-.014, metro:.05, sex:.08,
+   pro:['양육·돌봄 시간 확보','일·가정 양립','삶의 질 개선이 출산 결정에 영향'],
+   con:['임금·생산성 우려','출산율과 직접 연관 약함','업종별 적용 한계'],
+   qpro:['시간이 있어야 아이를 키울 엄두라도 내죠.','평일 하루만 더 있어도 육아가 훨씬 수월해질 거예요.'],
+   qcon:['쉬는 날이 는다고 아이를 낳을까요? 비용 문제가 더 커요.','교대근무 현장엔 적용이 어렵습니다.'],
+   qneu:['도움은 되겠지만 주거·교육비가 더 결정적이라고 봐요.']},
+];
+
+const Q_EN=[
+ {id:'q_settle', t:'Should young people get relocation grants to slow regional decline?',
+   bias:.18, age:-.004, metro:-.34, sex:0,
+   pro:['Directly slows outflow from the regions','Eases youth housing & startup costs','Seed money for balanced growth'],
+   con:['Fiscal burden & sustainability doubts','Grants alone are weak settlement incentive','Limited effect without local jobs'],
+   qpro:['With a grant I’d seriously consider staying in my hometown.','When youth leave, local shops collapse first. Direct support is right.'],
+   qcon:['Money alone won’t keep people if there are no jobs.','I doubt we can fund this every year from taxes.'],
+   qneu:['I get the intent, but jobs and living conditions must come too.']},
+ {id:'q_relocate', t:'Should more public agencies move out of the capital region?',
+   bias:.08, age:.001, metro:-.5, sex:0,
+   pro:['Eases capital overcrowding & housing prices','Creates quality regional jobs','National balanced development'],
+   con:['Family separation & poor amenities','Lower efficiency & access','Relocation alone is a weak base'],
+   qpro:['Good jobs in the regions give youth a reason to stay.','To curb capital housing prices, dispersal is the answer.'],
+   qcon:['I visited a relocated cluster — empty on weekends, families stay in Seoul.','We must check if the effect justifies the cost.'],
+   qneu:['Relocation is only a start; living conditions are the key.']},
+ {id:'q_leave', t:'Should parental leave be mandatory to address low birthrates?',
+   bias:.22, age:-.012, metro:.06, sex:.18,
+   pro:['Shares childcare burden across society','Expands fathers’ childcare participation','Reduces career interruption'],
+   con:['Burden on SMEs & backfill problem','Incentives work better than mandates','Operational rigidity on site'],
+   qpro:['Make it mandatory so people can take it without pressure — fathers especially.','A right you can’t use is useless. It needs teeth.'],
+   qcon:['In a 5-person company, who covers the work if it’s mandatory?','Support for backfill staff should come before any mandate.'],
+   qneu:['Right direction, but it should differ by company size.']},
+ {id:'q_retire', t:'Do you support raising the retirement age to 65?',
+   bias:-.02, age:.018, metro:0, sex:-.04,
+   pro:['Closes the pre-pension income gap','Uses skilled workers','Aligns with pension eligibility age'],
+   con:['Fear of squeezing youth hiring','Pay-system reform needed first','Higher labor cost for firms'],
+   qpro:['Pension starts at 65 but retirement at 60 — how to survive the 5-year gap?','Forcing out people who can still work is a social loss.'],
+   qcon:['If senior posts don’t open up, where do we young workers go?','Extending without pay-peak reform just adds burden.'],
+   qneu:['Extension is needed, but pay-system reform must come with it.']},
+ {id:'q_immig', t:'Should we accept more immigrants to counter population decline?',
+   bias:-.06, age:-.006, metro:.12, sex:0,
+   pro:['Offsets shrinking working-age population','Eases labor shortage in regions & SMEs','Broadens social diversity'],
+   con:['Social integration & safety concerns','Fear of job competition for locals','Lack of settlement infrastructure'],
+   qpro:['Factories and farms have no people. We can’t survive without immigration.','Many worksites already can’t run without foreign workers.'],
+   qcon:['Raising numbers without integration policy worries me about conflict.','We should first raise youth, women and senior employment.'],
+   qneu:['Necessary, but settlement and education infrastructure must be ready too.']},
+ {id:'q_4day', t:'Would a 4-day workweek help recover the birthrate?',
+   bias:.05, age:-.014, metro:.05, sex:.08,
+   pro:['Secures time for childcare','Work–life balance','Quality of life affects the decision to have kids'],
+   con:['Wage & productivity concerns','Weak direct link to birthrate','Limits by industry'],
+   qpro:['You can only consider raising kids if you have time.','One more weekday off would make childcare far easier.'],
+   qcon:['Would more days off make people have kids? Cost matters more.','Hard to apply on shift-work sites.'],
+   qneu:['It would help, but housing and education costs are more decisive.']},
+];
+const Q_JA=[
+ {id:'q_settle', t:'地方消滅を防ぐため、若者の定着支援金を支給すべきか？',
+   bias:.18, age:-.004, metro:-.34, sex:0,
+   pro:['地方からの人口流出を直接抑える','若者の住居・起業負担を軽減','均衡発展の呼び水'],
+   con:['財政負担と持続可能性への疑問','支援金だけでは定着の誘因が弱い','雇用がなければ効果は限定的'],
+   qpro:['支援金があれば故郷に残ることを真剣に考えます。','若者が去れば地元商店街から崩れます。直接支援が正しい。'],
+   qcon:['お金だけ配っても、雇用がなければ結局また出て行きます。','毎年税金で賄えるのか疑問です。'],
+   qneu:['趣旨には共感しますが、雇用と定住環境が伴うべきだと思います。']},
+ {id:'q_relocate', t:'首都圏一極集中の緩和のため、公共機関をさらに地方へ移転すべきか？',
+   bias:.08, age:.001, metro:-.5, sex:0,
+   pro:['首都圏の過密・住宅価格の緩和','地域に良質な雇用を創出','国土の均衡発展'],
+   con:['家族の分離・定住環境の不備','業務効率・アクセスの低下','移転だけでは自立基盤が弱い'],
+   qpro:['良い雇用が地方に生まれれば、若者が残る理由になります。','首都圏の住宅価格を抑えるには分散が答えです。'],
+   qcon:['移転先に行ったら週末はがらがら。家族はソウルに残ったままです。','移転コストに見合う効果が本当にあるのか検証すべきです。'],
+   qneu:['移転は始まりにすぎず、定住環境が核心だと思います。']},
+ {id:'q_leave', t:'少子化対策として育児休業を義務化すべきか？',
+   bias:.22, age:-.012, metro:.06, sex:.18,
+   pro:['養育負担を社会で分担','男性の育児参加を拡大','キャリア中断を緩和'],
+   con:['中小企業の負担・代替人員の問題','強制よりインセンティブが有効','現場運営の硬直化'],
+   qpro:['気兼ねなく取れるよう義務化が必要です。特に父親に。','制度があっても使えなければ意味がない。強制力が要ります。'],
+   qcon:['社員5人の会社で義務化したら、誰が仕事を埋めるのですか。','義務より代替人員への支援が先だと思います。'],
+   qneu:['方向は正しいが、企業規模ごとに変えるべきだと思います。']},
+ {id:'q_retire', t:'定年を65歳に延長することに賛成ですか？',
+   bias:-.02, age:.018, metro:0, sex:-.04,
+   pro:['老後の所得空白を解消','熟練人材の活用','年金受給年齢との整合'],
+   con:['若者採用の萎縮の懸念','賃金体系の改編が先決','企業の人件費負担'],
+   qpro:['年金は65歳からなのに定年は60歳、5年の空白をどう耐えるのですか。','まだ働けるのに退けというのは社会的損失です。'],
+   qcon:['上のポストが空かなければ、私たち若者はどこへ行くのですか。','賃金ピーク制のような改編なしに延長だけでは負担が増すだけです。'],
+   qneu:['延長は必要ですが、賃金体系の改編が伴うべきです。']},
+ {id:'q_immig', t:'人口減少への対応として移民をより積極的に受け入れるべきか？',
+   bias:-.06, age:-.006, metro:.12, sex:0,
+   pro:['生産年齢人口の減少を補う','地方・中小企業の人手不足を緩和','社会の多様性を拡大'],
+   con:['社会統合・治安への懸念','先住民の雇用競合の懸念','定着インフラの不足'],
+   qpro:['工場も農村も人がいません。移民なしでは持ちません。','すでに外国人なしでは回らない現場が多いです。'],
+   qcon:['統合政策なしに数だけ増やせば、対立が生じないか心配です。','まず若者・女性・高齢者の雇用から増やすべきだと思います。'],
+   qneu:['必要ですが、定着・教育インフラも併せて整えるべきです。']},
+ {id:'q_4day', t:'週4日勤務は出生率の回復に役立つか？',
+   bias:.05, age:-.014, metro:.05, sex:.08,
+   pro:['育児・ケアの時間を確保','仕事と家庭の両立','生活の質の改善が出産の決断に影響'],
+   con:['賃金・生産性への懸念','出生率との直接の関連は弱い','業種ごとの適用の限界'],
+   qpro:['時間があってこそ子育てを考える余裕も生まれます。','平日が1日増えるだけで育児はずっと楽になるはずです。'],
+   qcon:['休みが増えたら子どもを産むでしょうか？費用の問題の方が大きい。','交代勤務の現場には適用が難しいです。'],
+   qneu:['役立つでしょうが、住居・教育費の方が決定的だと思います。']},
+];
+const QSETS={ko:Q_KO,ja:Q_JA,en:Q_EN};
+let QUESTIONS=Q_KO, LANG='ko';
+const I18N={
+ ko:{sub:'페르소나 의견 탐색',aud:'응답자 표본',minAge:'최소 연령',maxAge:'최대 연령',sample:'표본 크기',sex:'성별',job:'직업군',ind:'산업',edu:'학력',region:'지역',reset:'필터 초기화',selTitle:'선택한 지역',clearAll:'전체 해제',lvSido:'시·도',lvSgg:'시·군·구',lvEmd:'읍·면·동',ask:'만약 대한민국이라면…  (인구 감소에 대해 물어보세요)'},
+ ja:{sub:'ペルソナ意見探索',aud:'回答者サンプル',minAge:'最小年齢',maxAge:'最大年齢',sample:'サンプル数',sex:'性別',job:'職業',ind:'産業',edu:'学歴',region:'地域',reset:'フィルタ初期化',selTitle:'選択した地域',clearAll:'全解除',lvSido:'市・道',lvSgg:'市・郡・区',lvEmd:'邑・面・洞',ask:'もし韓国なら…  (人口減少について聞いてください)'},
+ en:{sub:'Persona Opinion Explorer',aud:'Respondent sample',minAge:'Min age',maxAge:'Max age',sample:'Sample size',sex:'Gender',job:'Occupation',ind:'Industry',edu:'Education',region:'Region',reset:'Reset filters',selTitle:'Selected regions',clearAll:'Clear all',lvSido:'Province',lvSgg:'Municipality',lvEmd:'Neighborhood',ask:'What if Korea…  (ask about population decline)'}
+};
+function applyLang(L){ LANG=QSETS[L]?L:'ko'; QUESTIONS=QSETS[LANG];
+  document.querySelectorAll('[data-i18n]').forEach(el=>{const v=I18N[LANG][el.dataset.i18n]; if(v!=null)el.textContent=v;});
+  document.querySelectorAll('[data-i18n-ph]').forEach(el=>{const v=I18N[LANG][el.dataset.i18nPh]; if(v!=null)el.placeholder=v;});
+  if(typeof renderChips==='function')renderChips();
+  if(typeof setLevelPill==='function'&&typeof curLevel!=='undefined'&&curLevel)setLevelPill(curLevel);
+}
+
+/* ---- 의견 시뮬레이션 ---- */
+function simulate(q, sample){
+  // stance score per persona
+  const res=sample.map(p=>{
+    let s=q.bias + (p.age-45)*q.age + (p.metro-0.4)*q.metro + (p.sex==='f'?q.sex:-q.sex)*0.5;
+    s += (h01(p.id*131 + q.id.length*977 + q.t.length*31)-0.5)*0.9; // spread
+    let st = s>0.16?'pro':s<-0.16?'con':'neu';
+    return {p,s,st};
+  });
+  const n=res.length;
+  const cPro=res.filter(r=>r.st==='pro').length, cCon=res.filter(r=>r.st==='con').length, cNeu=n-cPro-cCon;
+  // themes
+  const proTh=q.pro.map(l=>({l,v:0})), conTh=q.con.map(l=>({l,v:0}));
+  res.forEach(r=>{ const idx=Math.floor(h01(r.p.id*53+q.id.length*17)*1000);
+    if(r.st==='pro')proTh[idx%proTh.length].v++; else if(r.st==='con')conTh[idx%conTh.length].v++; });
+  // region split
+  const reg={}; res.forEach(r=>{const k=r.p.r;(reg[k]=reg[k]||{pro:0,con:0,neu:0,n:0});reg[k][r.st]++;reg[k].n++;});
+  // quotes: representative across stances
+  function qpick(stance,arr,count){
+    const pool=res.filter(r=>r.st===stance);
+    const out=[];
+    for(let i=0;i<count && i<pool.length;i++){
+      const r=pool[Math.floor(h01(i*97+q.id.length*7)*pool.length)%pool.length];
+      const tx=arr[Math.floor(h01(r.p.id*41+i*13)*arr.length)%arr.length];
+      out.push({p:r.p,st:stance,tx});
+    }
+    return out;
+  }
+  let quotes=[];
+  if(cPro>=cCon){quotes=qpick('pro',q.qpro,2).concat(qpick('con',q.qcon,1),qpick('neu',q.qneu,1));}
+  else {quotes=qpick('con',q.qcon,2).concat(qpick('pro',q.qpro,1),qpick('neu',q.qneu,1));}
+  quotes=quotes.filter(Boolean);
+  return {n,cPro,cCon,cNeu,proTh,conTh,reg,quotes};
+}
+
+/* ---- render results ---- */
+function renderResults(q, sample, sim){
+  const total=$('matchCount').textContent;
+  $('resQ').textContent=q.t;
+  $('resMeta').innerHTML=`<span class="num">${sim.n}</span>명 응답 · 필터 추정 <span class="num">${total}</span>명 · 합성 표본`;
+  const pct=c=>sim.n?Math.round(c/sim.n*100):0;
+  const pPro=pct(sim.cPro),pCon=pct(sim.cCon),pNeu=100-pPro-pCon;
+  const stanceMaj=sim.cPro>=sim.cCon?'pro':'con';
+  const sumLine = stanceMaj==='pro'
+    ? `표본의 <b>${pPro}%</b>가 찬성으로 기울었습니다.`
+    : `표본의 <b>${pCon}%</b>가 반대로 기울었습니다.`;
+
+  const themeBars=(arr,color)=>{const mx=Math.max(...arr.map(t=>t.v),1);
+    return arr.slice().sort((a,b)=>b.v-a.v).map(t=>`<div class="theme">
+      <div class="tr"><span>${t.l}</span><span class="pc">${sim.n?Math.round(t.v/sim.n*100):0}%</span></div>
+      <div class="bar"><i style="width:${Math.max(4,t.v/mx*100)}%;background:${color}"></i></div></div>`).join('');};
+
+  const avatar=(p)=>{const col=stanceColor(); return col;};
+  const quoteCard=(qq)=>{
+    const stColor={pro:'var(--pro)',con:'var(--con)',neu:'var(--neu)'}[qq.st];
+    const stLabel={pro:'찬성',con:'반대',neu:'중립'}[qq.st];
+    const init=qq.p.region.slice(0,1);
+    return `<div class="quote">
+      <div class="who">
+        <span class="av" style="background:${stColor}">${init}</span>
+        <span class="nm">${qq.p.age}세 ${qq.p.sex==='f'?'여성':'남성'}</span>
+        <span class="tags">${qq.p.region} · ${qq.p.job}</span>
+        <span class="st ${qq.st}">${stLabel}</span>
+      </div>
+      <div class="tx">${qq.tx}</div></div>`;
+  };
+
+  // region rows (top by sample count)
+  const regRows=Object.entries(sim.reg).sort((a,b)=>b[1].n-a[1].n).slice(0,8).map(([k,v])=>{
+    const p=v.n?Math.round(v.pro/v.n*100):0,c=v.n?Math.round(v.con/v.n*100):0,nu=100-p-c;
+    return `<tr><td class="rn">${byCode[k].n}</td>
+      <td><div class="mini"><i style="width:${p}%;background:var(--pro)"></i><i style="width:${nu}%;background:var(--neu)"></i><i style="width:${c}%;background:var(--con)"></i></div></td>
+      <td class="pcell">${p}%</td></tr>`;}).join('');
+
+  $('resBody').innerHTML=`
+    <div class="res-sec">
+      <h3>전체 의견 분포</h3>
+      <div class="sentiment">
+        <i style="width:${pPro}%;background:var(--pro)"></i>
+        <i style="width:${pNeu}%;background:var(--neu)"></i>
+        <i style="width:${pCon}%;background:var(--con)"></i>
+      </div>
+      <div class="sent-legend">
+        <span class="it"><span class="sw" style="background:var(--pro)"></span><span class="k">찬성</span><span class="v">${pPro}%</span></span>
+        <span class="it"><span class="sw" style="background:var(--neu)"></span><span class="k">중립</span><span class="v">${pNeu}%</span></span>
+        <span class="it"><span class="sw" style="background:var(--con)"></span><span class="k">반대</span><span class="v">${pCon}%</span></span>
+      </div>
+      <p style="margin-top:11px;font-size:13.5px;color:#34383d">${sumLine} 아래는 ${stanceMaj==='pro'?'주요 찬성·반대':'주요 반대·찬성'} 논거와 대표 의견입니다.</p>
+    </div>
+
+    <div class="res-sec"><h3>찬성 측 주요 논거</h3>${themeBars(sim.proTh,'var(--pro)')}</div>
+    <div class="res-sec"><h3>반대 측 주요 논거</h3>${themeBars(sim.conTh,'var(--con)')}</div>
+
+    <div class="res-sec"><h3>대표 의견</h3>${sim.quotes.map(quoteCard).join('')}</div>
+
+    <div class="res-sec"><h3>지역별 찬성률</h3>
+      <table class="rtbl"><tbody>${regRows}</tbody></table>
+    </div>
+
+    <div class="disc"><b>참고 ·</b> 이 결과는 실제 여론조사가 아니라 <b>합성 페르소나</b>의 속성에 기반한 가정 시뮬레이션입니다. 인구·정책 변수의 단순 가중 모델로 산출되며, 실제 응답·통계와 다를 수 있습니다.</div>
+  `;
+  $('results').classList.add('on');
+  paintMarkers(sim);
+}
+function stanceColor(){return 'var(--accent)';}
+
+/* ---- map: 행정경계 줌 연동 (시도→시군구→읍면동) ---- */
+let map=null, mapReady=false, curLevel=null, CURsim=null, hoverId=null, selId=null;
+const GH='https://raw.githubusercontent.com/southkorea/southkorea-maps/master/kostat/2018/json/';
+const ADMIN={
+  sido:{max:8.3,  url:GH+'skorea-provinces-2018-geo.json',        label:'시·도'},
+  sgg: {max:10.0, url:GH+'skorea-municipalities-2018-geo.json',   label:'시·군·구'},
+  emd: {max:99,   url:GH+'skorea-submunicipalities-2018-geo.json',label:'읍·면·동'},
+};
+const adminCache={};
+function levelForZoom(z){ return z<ADMIN.sido.max?'sido':z<ADMIN.sgg.max?'sgg':'emd'; }
+
+function initMap(){
+  if(!window.maplibregl){ return false; }
+  try{
+    map=new maplibregl.Map({
+      container:'map',
+      style:{version:8,
+        sources:{
+          carto:{type:'raster',tiles:['https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png','https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png'],tileSize:256,attribution:'© OpenStreetMap · © CARTO'}
+        },
+        layers:[
+          {id:'bg',type:'background',paint:{'background-color':'#dbe4ef'}},
+          {id:'carto',type:'raster',source:'carto'}
+        ]},
+      center:[127.9,35.9], zoom:5.7, minZoom:4.4, maxZoom:18, attributionControl:false,
+      maxBounds:[[119.5,29.5],[136.0,41.5]], renderWorldCopies:false, dragRotate:false
+    });
+    map.addControl(new maplibregl.AttributionControl({compact:true}));
+    map.on('load',()=>{
+      $('mapFallback').style.display='none';
+      map.addSource('admin',{type:'geojson',data:{type:'FeatureCollection',features:[]},generateId:true});
+      map.addLayer({id:'admin-fill',type:'fill',source:'admin',
+        paint:{'fill-color':'#7c5cff','fill-opacity':['case',['boolean',['feature-state','hover'],false],0.32,0.10]}});
+      map.addLayer({id:'admin-line',type:'line',source:'admin',
+        paint:{'line-color':'rgba(91,68,214,.5)','line-width':['case',['boolean',['feature-state','hover'],false],1.8,0.6]}});
+      map.addLayer({id:'admin-selfill',type:'fill',source:'admin',
+        filter:['in',['to-string',['get','code']],['literal',['__none__']]],
+        paint:{'fill-color':'#7c5cff','fill-opacity':0.28}});
+      map.addLayer({id:'admin-sel',type:'line',source:'admin',
+        filter:['in',['to-string',['get','code']],['literal',['__none__']]],
+        paint:{'line-color':'#5b44d6','line-width':2.8}});
+      try{ map.setPadding({top:78,bottom:150,left:12,right:12}); }catch(_){}
+      mapReady=true; wireMapInteract(); wireZoomCtrl(); setLevel(levelForZoom(map.getZoom()),true);
+    });
+    map.on('zoom',()=>{ if(!mapReady)return; const lv=levelForZoom(map.getZoom()); if(lv!==curLevel)setLevel(lv); });
+    map.on('error',()=>{});
+    return true;
+  }catch(e){ return false; }
+}
+function setLevelPill(lv){ const el=$('levelPill'); const k={sido:'lvSido',sgg:'lvSgg',emd:'lvEmd'}[lv];
+  const lbl=(typeof I18N!=='undefined'&&I18N[LANG]&&I18N[LANG][k])||ADMIN[lv].label;
+  if(el)el.innerHTML=`<span class="dotp"></span>${lbl}`; setActiveLevelBtn(lv); }
+function setActiveLevelBtn(lv){ const seg=$('zcSeg'); if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.lv===lv)); }
+function wireZoomCtrl(){
+  const tgt={sido:7,sgg:9.6,emd:12.5};
+  $('zcSeg').querySelectorAll('button').forEach(b=>b.onclick=()=>{ map.easeTo({zoom:tgt[b.dataset.lv],center:map.getCenter(),duration:650}); });
+  $('zcIn').onclick=()=>map.easeTo({zoom:Math.min(map.getZoom()+1,18),duration:300});
+  $('zcOut').onclick=()=>map.easeTo({zoom:Math.max(map.getZoom()-1,4.4),duration:300});
+}
+async function setLevel(lv,force){
+  if(!mapReady||(lv===curLevel&&!force)) return;
+  curLevel=lv; hoverId=selId=null; setLevelPill(lv);
+  let gj=adminCache[lv];
+  if(!gj){
+    if(lv==='emd') toast('읍·면·동 경계 불러오는 중…');
+    try{ const r=await fetch(ADMIN[lv].url); if(!r.ok)throw 0; gj=await r.json(); adminCache[lv]=gj; }
+    catch(e){ toast('경계 데이터를 불러오지 못했습니다'); return; }
+    if(curLevel!==lv) return; // 로딩 중 줌이 바뀜
+  }
+  if(map.getSource('admin')) map.getSource('admin').setData(gj);
+  if(lv==='sido') buildMask(gj);
+  repaintFill(); updateSelLayer();
+}
+/* 한국 외부를 가리는 마스크 (세계 사각형 − 시도 외곽선 구멍) → 다른 나라 숨김 */
+function buildMask(gj){
+  if(!map||!map.getSource('mask')||!gj||!gj.features) return;
+  const holes=[];
+  gj.features.forEach(f=>{const g=f.geometry; if(!g)return;
+    if(g.type==='Polygon') holes.push(g.coordinates[0]);
+    else if(g.type==='MultiPolygon') g.coordinates.forEach(poly=>holes.push(poly[0]));
+  });
+  const world=[[119,29],[137,29],[137,42],[119,42],[119,29]];
+  try{ map.getSource('mask').setData({type:'Feature',geometry:{type:'Polygon',coordinates:[world,...holes]}}); }catch(_){}
+}
+function provFillStops(){
+  const out=[]; Object.entries(CURsim.reg).forEach(([k,v])=>{ if(!v.n)return; out.push(k, v.pro>=v.con?'#10b981':'#e5484d'); });
+  return out;
+}
+function repaintFill(){
+  if(!mapReady||!map.getLayer('admin-fill')) return;
+  if(CURsim){
+    const stops=provFillStops();
+    if(stops.length){
+      map.setPaintProperty('admin-fill','fill-color',['match',['slice',['to-string',['get','code']],0,2],...stops,'#9aa0a6']);
+    } else { map.setPaintProperty('admin-fill','fill-color','#9aa0a6'); }
+    map.setPaintProperty('admin-fill','fill-opacity',['case',['boolean',['feature-state','hover'],false],0.6,0.42]);
+  } else {
+    map.setPaintProperty('admin-fill','fill-color','#7c5cff');
+    map.setPaintProperty('admin-fill','fill-opacity',['case',['boolean',['feature-state','hover'],false],0.22,0.0]);
+  }
+}
+function wireMapInteract(){
+  const chip=$('areaChip');
+  map.on('mousemove','admin-fill',e=>{
+    const f=e.features&&e.features[0]; if(!f)return;
+    map.getCanvas().style.cursor='pointer';
+    if(hoverId!==null) map.setFeatureState({source:'admin',id:hoverId},{hover:false});
+    hoverId=f.id; map.setFeatureState({source:'admin',id:hoverId},{hover:true});
+    const nm=f.properties.name||f.properties.name_eng||'—';
+    chip.innerHTML=`${nm}<span class="lv">${ADMIN[curLevel].label}</span>`;
+    chip.style.left=e.originalEvent.clientX+'px'; chip.style.top=e.originalEvent.clientY+'px';
+    chip.classList.add('on');
+  });
+  map.on('mouseleave','admin-fill',()=>{
+    map.getCanvas().style.cursor='';
+    if(hoverId!==null) map.setFeatureState({source:'admin',id:hoverId},{hover:false});
+    hoverId=null; chip.classList.remove('on');
+  });
+  map.on('click','admin-fill',e=>{
+    const f=e.features&&e.features[0]; if(!f)return;
+    toggleSelect(String(f.properties.code), f.properties.name||'—', curLevel);
+  });
+}
+
+/* ---- 선택 항목 (다중, 클릭 토글) ---- */
+const SELSET=new Map();  // key=level|code → {code,name,level}
+function selKey(lv,code){return lv+'|'+code;}
+function toggleSelect(code,name,lv){
+  const k=selKey(lv,code);
+  if(SELSET.has(k)){ SELSET.delete(k); toast(`${name} 선택 해제`); }
+  else { SELSET.set(k,{code,name,level:lv}); toast(`${name} 선택됨 · ${ADMIN[lv].label}`); }
+  updateSelLayer(); renderSelList();
+}
+function updateSelLayer(){
+  if(!mapReady||!map.getLayer('admin-sel')) return;
+  const codes=[...SELSET.values()].map(s=>s.code);
+  const filt=['in',['to-string',['get','code']],['literal',codes.length?codes:['__none__']]];
+  map.setFilter('admin-sel',filt); map.setFilter('admin-selfill',filt);
+}
+function renderSelList(){
+  const wrap=$('selPanel'), list=$('selList');
+  if(!wrap) return;
+  if(SELSET.size===0){ wrap.style.display='none'; return; }
+  wrap.style.display='';
+  $('selCount').textContent=SELSET.size;
+  list.innerHTML=[...SELSET.values()].map(s=>
+    `<span class="selchip" data-k="${selKey(s.level,s.code)}"><span class="lv">${ADMIN[s.level].label}</span>${s.name}<button class="x" aria-label="제거">×</button></span>`).join('');
+  list.querySelectorAll('.selchip').forEach(c=>{
+    c.querySelector('.x').onclick=()=>{ SELSET.delete(c.dataset.k); updateSelLayer(); renderSelList(); };
+  });
+}
+function clearSel(){ SELSET.clear(); updateSelLayer(); renderSelList(); }
+/* 호환 wrappers (기존 호출부 유지) */
+function clearMarkers(){}
+function baseMarkers(){ CURsim=null; repaintFill(); }
+function paintMarkers(sim){ CURsim=sim; repaintFill(); }
+
+/* ---- run a question ---- */
+let running=false, lastQ=null;
+const history=[];
+function runQuestion(q){
+  if(running) return; running=true;
+  $('sendBtn').classList.add('busy');
+  const sample=updateMatch();
+  // honor 표본 크기: cap sample
+  const size=Math.min(parseInt($('sampleSize').value,10)||60, sample.length);
+  const use=sample.slice(0,size);
+  lastQ=q;
+  setTimeout(()=>{
+    const sim=simulate(q,use.length?use:sample.slice(0,30));
+    renderResults(q,use,sim);
+    running=false; $('sendBtn').classList.remove('busy');
+    addHistory(q);
+    toast(`${use.length}명 응답 분석 완료`);
+  },560);
+}
+function freeQuestion(text){
+  // map free text to nearest known question by keyword, else generic settle
+  const t=text;
+  let q=QUESTIONS.find(q=>{
+    if(/정착|지원금|청년/.test(t)&&q.id==='q_settle')return true;
+    if(/공공기관|이전|수도권|분산/.test(t)&&q.id==='q_relocate')return true;
+    if(/육아|휴직|저출생|출산.*휴/.test(t)&&q.id==='q_leave')return true;
+    if(/정년|65세|연장|노후/.test(t)&&q.id==='q_retire')return true;
+    if(/이민|외국인|이주/.test(t)&&q.id==='q_immig')return true;
+    if(/주\s?4|4일제|근무|워라밸/.test(t)&&q.id==='q_4day')return true;
+    return false;
+  });
+  if(!q){ q={...QUESTIONS[0], id:'q_custom_'+t.length, t:t}; }
+  runQuestion(q);
+}
+
+/* ---- history ---- */
+function addHistory(q){
+  if(history.find(h=>h.t===q.t)) { history.splice(history.findIndex(h=>h.t===q.t),1); }
+  history.unshift({t:q.t,q}); if(history.length>8)history.pop();
+  renderHistory();
+}
+function renderHistory(){
+  const m=$('histMenu');
+  if(!history.length){ m.innerHTML='<div class="empty">아직 질문 기록이 없습니다</div>'; return; }
+  m.innerHTML=history.map((h,i)=>`<button class="hi" data-i="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v5h5"/><path d="M3.05 13A9 9 0 106 5.3L3 8"/></svg><span>${h.t}</span></button>`).join('');
+  m.querySelectorAll('.hi').forEach(b=>b.onclick=()=>{m.classList.remove('on');runQuestion(history[+b.dataset.i].q);});
+}
+
+/* ---- suggested chips ---- */
+function renderChips(){
+  $('chips').innerHTML=QUESTIONS.map((q,i)=>`<button class="chip" data-i="${i}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span>${q.t}</span></button>`).join('');
+  $('chips').querySelectorAll('.chip').forEach(b=>b.onclick=()=>{$('ask').value=QUESTIONS[+b.dataset.i].t;runQuestion(QUESTIONS[+b.dataset.i]);});
+}
+
+/* ---- custom select (자체 디자인 드롭다운) ---- */
+const CK='<svg class="ck" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 const CV='<svg class="cv" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 let openSel=null;
-function makeSelect(host,opts,value,onChange){
-  host.classList.add('csel'); host.innerHTML=`<button class="trg" type="button"><span class="lab"></span>${CV}</button>`;
-  const trg=host.querySelector('.trg'),lab=host.querySelector('.lab'); let val=value,menu=null;
-  const labelOf=v=>{const o=opts.find(o=>o.v===v);return o?o.l:'선택';};
+function closeSel(){ if(openSel){openSel(); openSel=null;} }
+function makeSelect(host, opts, value, onChange){
+  host.classList.add('csel');
+  host.innerHTML=`<button class="trg" type="button"><span class="lab"></span>${CV}</button>`;
+  const trg=host.querySelector('.trg'), lab=host.querySelector('.lab');
+  let val=value, menu=null;
+  const labelOf=v=>{const o=opts.find(o=>o.v===v);return o?o.l:'';};
   function setVal(v,fire){val=v;host.dataset.value=v;lab.textContent=labelOf(v);if(fire&&onChange)onChange(v);}
-  function close(){if(!menu)return;menu.remove();menu=null;host.classList.remove('open');document.removeEventListener('mousedown',od,true);openSel=null;}
-  function od(e){if(menu&&!menu.contains(e.target)&&!host.contains(e.target))close();}
-  function open(){ if(openSel)openSel(); menu=document.createElement('div');menu.className='csel-menu';
-    menu.innerHTML=opts.map(o=>`<button class="opt${o.v===val?' sel':''}" data-v="${o.v}"><span>${o.l}</span></button>`).join('');
-    document.body.appendChild(menu); const r=trg.getBoundingClientRect();
-    menu.style.left=r.left+'px';menu.style.width=Math.max(r.width,160)+'px';
-    const mh=menu.offsetHeight; menu.style.top=(r.bottom+6+mh>innerHeight-12&&r.top-6-mh>12?r.top-6-mh:r.bottom+6)+'px';
+  function close(){if(!menu)return;menu.remove();menu=null;host.classList.remove('open');
+    document.removeEventListener('mousedown',onDoc,true);window.removeEventListener('scroll',close,true);window.removeEventListener('resize',close);openSel=null;}
+  function onDoc(e){if(menu&&!menu.contains(e.target)&&!host.contains(e.target))close();}
+  function open(){
+    closeSel();
+    menu=document.createElement('div');menu.className='csel-menu';
+    menu.innerHTML=opts.map(o=>`<button class="opt${o.v===val?' sel':''}" type="button" data-v="${o.v}"><span>${o.l}</span>${o.v===val?CK:''}</button>`).join('');
+    document.body.appendChild(menu);
+    const r=trg.getBoundingClientRect();
+    menu.style.left=r.left+'px'; menu.style.width=r.width+'px';
+    const mh=menu.offsetHeight;
+    menu.style.top=(r.bottom+6+mh>window.innerHeight-12 && r.top-6-mh>12 ? r.top-6-mh : r.bottom+6)+'px';
     host.classList.add('open');
     menu.querySelectorAll('.opt').forEach(b=>b.onclick=()=>{setVal(b.dataset.v,true);close();});
-    setTimeout(()=>document.addEventListener('mousedown',od,true),0); openSel=close; }
+    setTimeout(()=>{document.addEventListener('mousedown',onDoc,true);window.addEventListener('scroll',close,true);window.addEventListener('resize',close);},0);
+    openSel=close;
+  }
   trg.onclick=e=>{e.stopPropagation();host.classList.contains('open')?close():open();};
-  setVal(value,false); return {set:v=>setVal(v,false),get:()=>val};
+  setVal(value,false);
+  return {set:v=>setVal(v,false), get:()=>val};
 }
-let FROMS,TOS;
-function buildRegionSelects(){
-  const areas=Object.values(curReg().areas).sort((a,b)=>a.code.localeCompare(b.code));
-  const opts=areas.map(a=>({v:a.code,l:a.name}));
-  if(!areas.find(a=>a.code===op.from))op.from=areas[0].code;
-  if(!areas.find(a=>a.code===op.to))op.to=areas[Math.min(1,areas.length-1)].code;
-  FROMS=makeSelect($('fromSel'),opts,op.from,v=>{op.from=v;});
-  TOS=makeSelect($('toSel'),opts,op.to,v=>{op.to=v;});
-}
-function syncControls(){
-  if(FROMS)FROMS.set(op.from); if(TOS)TOS.set(op.to);
-  $('valNum').value=op.value; $('valRange').value=Math.min(op.value,+$('valRange').max);
-  $('unitHint').textContent=op.unit==='percent'?'%':'명';
-  document.querySelectorAll('#opseg button').forEach(b=>b.classList.toggle('on',b.dataset.op===op.type));
-  document.querySelectorAll('#ageseg button').forEach(b=>b.classList.toggle('on',b.dataset.age===op.age));
-  document.querySelectorAll('#unitseg button').forEach(b=>b.classList.toggle('on',b.dataset.u===op.unit));
-  const mv=op.type==='move'; $('toField').style.display=mv?'':'none'; $('fromLbl').textContent=mv?'출발 지역':'대상 지역';
-}
-function buildOps(){
-  op.value=+$('valNum').value||0;
-  if(op.type==='move')return [{type:'move_population',fromAreaCode:op.from,toAreaCode:op.to,ageGroup:op.age,value:op.value,unit:op.unit}];
-  const t=op.type==='increase'?'increase_population':'decrease_population';
-  return [{type:t,targetAreaCode:op.from,ageGroup:op.age,value:op.value,unit:op.unit}];
-}
+const optAll=(arr,label)=>[{v:'all',l:label}].concat(arr.map(x=>({v:x,l:x})));
+const SELS={
+  sex: makeSelect($('sex'),[{v:'all',l:'전체'},{v:'m',l:'남성'},{v:'f',l:'여성'}],'all',readFilters),
+  job: makeSelect($('job'),optAll(JOBS,'전체 직업'),'all',readFilters),
+  ind: makeSelect($('ind'),optAll(INDS,'전체 산업'),'all',readFilters),
+  edu: makeSelect($('edu'),optAll(EDUS,'전체 학력'),'all',readFilters),
+  region: makeSelect($('region'),[{v:'all',l:'전체 지역'}].concat(SIDO.map(s=>({v:s.c,l:s.n}))),'all',readFilters),
+};
+$('poolTotal').textContent=POOL_TOTAL.toLocaleString('ko-KR');
 
-/* ---- run ---- */
-function baseOf(){const r=curReg();return {baseYear:r.baseYear,basePeriod:r.basePeriod,source:r.source,areas:r.areas};}
-function run(){
-  if(!hasData()){toast('이 단위는 인구 데이터가 준비 중입니다');return;}
-  const ops=buildOps();
-  if(op.type==='move'&&op.from===op.to){toast('출발/도착 지역이 같습니다');return;}
-  if(!op.value){toast('변화 규모를 입력하세요');return;}
-  try{
-    const result=DataIfEngine.run(baseOf(),ops);
-    const report=DataIfEngine.buildReport(result,ops,curTone);
-    SIM=result; renderResults(report,result,ops);
-    curMode='delta'; document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='delta'));
-    repaint(); toast('계산 완료');
-  }catch(e){toast('계산 오류');console.error(e);}
+/* ---- wire filters ---- */
+function readFilters(){
+  F.minAge=Math.min(+$('minAge').value||18,+$('maxAge').value||85);
+  F.maxAge=Math.max(+$('minAge').value||18,+$('maxAge').value||85);
+  F.sex=$('sex').dataset.value; F.job=$('job').dataset.value; F.ind=$('ind').dataset.value;
+  F.edu=$('edu').dataset.value; F.region=$('region').dataset.value;
+  updateMatch();
 }
-function rerunTone(){ if(!SIM)return; renderReport(DataIfEngine.buildReport(SIM,buildOps(),curTone)); }
+['minAge','maxAge'].forEach(id=>$(id).addEventListener('change',readFilters));
+$('sampleSize').addEventListener('input',e=>$('sampleVal').textContent=e.target.value);
+$('resetBtn').onclick=()=>{
+  $('minAge').value=18;$('maxAge').value=85;
+  SELS.sex.set('all');SELS.job.set('all');SELS.ind.set('all');SELS.edu.set('all');SELS.region.set('all');
+  $('sampleSize').value=60;$('sampleVal').textContent='60';readFilters();toast('필터 초기화됨');
+};
 
-function renderResults(report,result,ops){
-  const c=result.confidence, top=result.topImpactedAreas;
-  $('resQ').textContent=report.summary;
-  $('resMeta').innerHTML=`<span class="conf ${c.grade}">신뢰도 ${({high:'높음',medium:'보통',low:'낮음'})[c.grade]}</span><span>기준 ${result.basePeriod||result.baseYear}</span>`;
-  const cards=top.slice(0,4).map(a=>{const d=result.areas[a.code],dl=d.delta.total,cls=dl>0?'up':dl<0?'down':'flat',ar=dl>0?'▲':dl<0?'▼':'—';
-    return `<div class="mcard"><div class="t">${short(a.name)} 총인구</div><div class="v num">${d.after.total.toLocaleString('ko')}</div><div class="d ${cls} num">${ar} ${Math.abs(dl).toLocaleString('ko')} · 청년 ${fmtD('ratio',d.delta.youthRatio)}</div></div>`;}).join('')||'<div class="disc">변화 없음</div>';
-  const rows=top.slice(0,8).map(a=>{const cls=a.deltaTotal>0?'up':a.deltaTotal<0?'down':'';
-    return `<tr><td class="rn">${short(a.name)}</td><td class="pcell ${cls}">${a.deltaTotal>0?'+':''}${a.deltaTotal.toLocaleString('ko')}</td><td class="pcell ${a.deltaYouthRatio>0?'up':a.deltaYouthRatio<0?'down':''}">${fmtD('ratio',a.deltaYouthRatio)}</td></tr>`;}).join('');
-  $('resBody').innerHTML=`
-    <div class="res-sec"><h3>전/후 비교 (영향 상위)</h3><div class="cards">${cards}</div></div>
-    <div class="res-sec"><h3>AI 리포트</h3>
-      <div class="tone" id="toneSel"><button data-t="general" class="on">일반</button><button data-t="article">기사</button><button data-t="policy">정책</button><button data-t="exec">경영진</button></div>
-      <div id="report"></div></div>
-    <div class="res-sec"><h3>지역별 변화 · 청년비율</h3><table class="rtbl"><tbody>${rows}</tbody></table></div>
-    <div class="res-sec"><h3>근거 데이터</h3><div class="evi" id="evi"></div></div>
-    <div class="disc"><b>참고 ·</b> 미래 예측이 아니라 입력 가정과 공개 통계 기반 단순 시뮬레이션입니다. 일자리·주택·교통·정책 등 외부 변수는 미반영.</div>`;
-  document.querySelectorAll('#toneSel button').forEach(b=>b.onclick=()=>{curTone=b.dataset.t;document.querySelectorAll('#toneSel button').forEach(x=>x.classList.toggle('on',x===b));rerunTone();});
-  renderReport(report); renderEvidence(result,ops);
-  $('results').classList.add('on');
-}
-function renderReport(report){
-  $('report').innerHTML=report.blocks.map(b=>`<div class="rblock ${b.type}" data-codes="${(b.linkedAreaCodes||[]).filter(Boolean).join(',')}"><div class="h">${b.title}</div><div class="x">${b.text}</div></div>`).join('');
-  document.querySelectorAll('.rblock').forEach(el=>el.onclick=()=>{
-    const codes=(el.dataset.codes||'').split(',').filter(Boolean); if(!codes.length)return;
-    map.setFilter('hl',['in','code',...codes]);
-    const f=GEO[LEVEL].features.find(f=>f.properties.code===codes[0]); if(f&&f.properties.centroid)map.flyTo({center:f.properties.centroid,zoom:LEVEL==='sgg'?8:6.6});
-  });
-}
-function renderEvidence(result,ops){
-  const nm=c=>result.areas[c]?result.areas[c].name:c;
-  const txt=ops.map(o=>{const vs=o.unit==='percent'?o.value+'%':(+o.value).toLocaleString('ko')+'명';
-    if(o.type==='move_population')return `${nm(o.fromAreaCode)}→${nm(o.toAreaCode)} ${o.ageGroup} ${vs} 이동`;
-    return `${nm(o.targetAreaCode)} ${o.ageGroup} ${vs} ${o.type==='increase_population'?'증가':'감소'}`;}).join(' · ');
-  const rows=[['데이터',result.source],['기준',result.basePeriod||result.baseYear],['지역 단위',LEVEL==='sido'?'시·도':'시·군·구'],
-    ['적용 가정',txt],['계산','결정론적 엔진(Python)'],['신뢰도',({high:'높음',medium:'보통',low:'낮음'})[result.confidence.grade]+` (${result.confidence.score})`],['미반영','일자리·주택·교통·정책·자연증감']];
-  $('evi').innerHTML=rows.map(([k,v])=>`<div><span>${k}</span><b>${v}</b></div>`).join('');
-}
+/* ---- ask bar ---- */
+$('sendBtn').onclick=()=>{const v=$('ask').value.trim(); if(!v){toast('질문을 입력하거나 추천 질문을 눌러보세요');return;} freeQuestion(v);};
+$('ask').addEventListener('keydown',e=>{if(e.key==='Enter')$('sendBtn').onclick();});
 
-/* ---- NL ---- */
-function sendNL(text){
-  if(!text.trim())return; if(LEVEL!=='sido'){toast('자연어 입력은 시·도 단위 · 시·군·구는 지도 클릭/선택으로');return;}
-  const d=DataIfEngine.parse(text);
-  if(!d.isSupported){toast(d.unsupportedReason);return;}
-  if(d.needClarification){toast(d.clarificationQuestion);return;}
-  const o=d.operations[0];
-  op.type={move_population:'move',increase_population:'increase',decrease_population:'decrease'}[o.type];
-  op.from=o.fromAreaCode||o.targetAreaCode; op.to=o.toAreaCode||op.to; op.age=o.ageGroup; op.value=o.value; op.unit=o.unit;
-  syncControls(); run();
-}
+/* ---- audience collapse ---- */
+$('audToggle').onclick=()=>$('audience').classList.toggle('collapsed');
 
-/* ---- templates ---- */
-const TPL=['서울 청년 5만 명이 세종으로 이동하면?','서울 청년 10%가 경기로 이동하면?','부산 청년 인구가 10% 감소하면?','전북 청년 인구가 3만 명 증가하면?'];
-function renderChips(){
-  $('chips').innerHTML=TPL.map(t=>`<button class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/></svg><span>${t}</span></button>`).join('');
-  document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const t=b.textContent.trim();$('ask').value=t;sendNL(t);});
-}
+/* ---- history toggle ---- */
+$('histBtn').onclick=(e)=>{e.stopPropagation();$('histMenu').classList.toggle('on');};
+document.addEventListener('click',e=>{if(!$('histMenu').contains(e.target)&&e.target!==$('histBtn'))$('histMenu').classList.remove('on');});
+
+/* ---- results close ---- */
+$('resClose').onclick=()=>{$('results').classList.remove('on');baseMarkers();};
+$('selClear').onclick=clearSel;
+(function(){const NM={ko:'한국어',ja:'日本語',en:'English'};
+  const sw=$('langSwitch'),btn=$('langBtn'),menu=$('langMenu'),cur=$('langCur');
+  function sync(){cur.textContent=NM[LANG]||LANG;menu.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.l===LANG));}
+  btn.onclick=e=>{e.stopPropagation();const o=sw.classList.toggle('open');btn.setAttribute('aria-expanded',o);};
+  menu.querySelectorAll('button').forEach(b=>b.onclick=()=>{applyLang(b.dataset.l);sync();sw.classList.remove('open');btn.setAttribute('aria-expanded','false');});
+  document.addEventListener('click',e=>{if(!sw.contains(e.target)){sw.classList.remove('open');btn.setAttribute('aria-expanded','false');}});
+  sync();})();
 
 /* ---- toast ---- */
-let tt;function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2400);}
-
-/* ---- wire ---- */
-function wire(){
-  $('sendBtn').onclick=()=>sendNL($('ask').value);
-  $('ask').addEventListener('keydown',e=>{if(e.key==='Enter')sendNL($('ask').value);});
-  $('runBtn').onclick=run;
-  $('resetBtn').onclick=()=>{op={type:'move',from:'11',to:'29',age:'20-34',value:50000,unit:'people'};SIM=null;curMode='base';
-    if(LEVEL!=='sido')return switchLevel('sido');
-    document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));
-    syncControls();repaint();$('results').classList.remove('on');toast('초기화됨');};
-  document.querySelectorAll('#opseg button').forEach(b=>b.onclick=()=>{op.type=b.dataset.op;syncControls();});
-  document.querySelectorAll('#ageseg button').forEach(b=>b.onclick=()=>{op.age=b.dataset.age;syncControls();});
-  document.querySelectorAll('#unitseg button').forEach(b=>b.onclick=()=>{op.unit=b.dataset.u;
-    $('valRange').max=op.unit==='percent'?100:200000; $('valRange').step=op.unit==='percent'?1:5000;
-    if(op.unit==='percent'&&op.value>100)op.value=10; syncControls();});
-  $('valRange').addEventListener('input',e=>{op.value=+e.target.value;$('valNum').value=op.value;});
-  $('valNum').addEventListener('input',e=>{op.value=+e.target.value||0;$('valRange').value=Math.min(op.value,+$('valRange').max);});
-  document.querySelectorAll('#modeTog button').forEach(b=>b.onclick=()=>{if(b.dataset.m==='delta'&&!SIM){toast('먼저 시뮬레이션 실행');return;}curMode=b.dataset.m;document.querySelectorAll('#modeTog button').forEach(x=>x.classList.toggle('on',x===b));repaint();});
-  document.querySelectorAll('#zcSeg button').forEach(b=>b.onclick=()=>switchLevel(b.dataset.lv));
-  $('zcIn').onclick=()=>map.easeTo({zoom:Math.min(map.getZoom()+1,11),duration:300});
-  $('zcOut').onclick=()=>map.easeTo({zoom:Math.max(map.getZoom()-1,5),duration:300});
-  $('ctrlToggle').onclick=()=>$('ctrl').classList.toggle('collapsed');
-  $('resClose').onclick=()=>{$('results').classList.remove('on');SIM=null;curMode='base';document.querySelectorAll('#modeTog button').forEach(b=>b.classList.toggle('on',b.dataset.m==='base'));repaint();};
-  $('metricSel').innerHTML=Object.entries(METRICS).map(([k,m])=>`<button data-k="${k}" class="${k===curMetric?'on':''}">${m.label}</button>`).join('');
-  document.querySelectorAll('#metricSel button').forEach(b=>b.onclick=()=>{curMetric=b.dataset.k;document.querySelectorAll('#metricSel button').forEach(x=>x.classList.toggle('on',x===b));repaint();});
-}
+let tt; function toast(m){const t=$('toast');t.textContent=m;t.classList.add('on');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('on'),2100);}
 
 /* ---- boot ---- */
-async function boot(){
-  try{ await loadLevel('sido'); }
-  catch(e){ $('hstat').innerHTML='<span class="bad">●</span> 데이터 로드 실패'; toast('데이터 로드 실패'); return; }
-  const r=curReg();
-  $('hstat').innerHTML=`<span class="ok">●</span> ${Object.keys(r.areas).length}개 시·도 · ${r.basePeriod||r.baseYear}`;
-  loadLevel('sgg').then(()=>{ if(!(REG.sgg&&REG.sgg.hasData))$('sggBtn').title='인구 데이터 준비 중'; }).catch(()=>{});
-  buildRegionSelects(); syncControls(); renderChips(); wire(); initMap();
-  const q=new URLSearchParams(location.search).get('q'); if(q){$('ask').value=q;setTimeout(()=>sendNL(q),700);}
-}
-boot();
+renderChips(); renderHistory(); updateMatch();
+if(!initMap()){ $('mapFallback').querySelector('span').textContent='지도를 불러오지 못했지만 의견 분석은 그대로 사용할 수 있습니다.'; }
+loadRealPop();  /* 실측 시도 인구 반영 (JS만) */
 </script>
 </body>
 </html>
